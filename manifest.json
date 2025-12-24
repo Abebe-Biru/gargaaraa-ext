@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gargaaraa AI Assistant",
-  "version": "1.2",
+  "version": "1.4",
   "description": "Context-aware AI assistant for Amharic and Afaan Oromoo.",
   "permissions": [
     "sidePanel",
@@ -10,12 +10,29 @@
     "activeTab",
     "scripting"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icon.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "icons": {
     "16": "icon.png",
     "48": "icon.png",

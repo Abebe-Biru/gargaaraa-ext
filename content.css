@@ -1,0 +1,27 @@
+.gargaaraa-fab {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  background-color: #ffffff;
+  background-size: 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+  cursor: pointer;
+  z-index: 2147483647; /* Max Z-Index */
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  pointer-events: auto;
+}
+
+.gargaaraa-fab.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.gargaaraa-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+}

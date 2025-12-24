@@ -1,3 +1,11 @@
+// --- 1. FIX CSP: Initialize Worker & Theme Immediately ---
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
+
+const savedTheme = localStorage.getItem("THEME");
+if (savedTheme === 'dark') {
+  document.documentElement.setAttribute("data-theme", "dark");
+}
+
 // --- TRANSLATIONS ---
 const TRANSLATIONS = {
   am: {
@@ -7,7 +15,8 @@ const TRANSLATIONS = {
     roleUser: "እርስዎ", roleAI: "ጋርጋራ",
     fileAttached: "ፋይል ተያይዟል", parsing: "በማንበብ ላይ...", errorRead: "ስህተት",
     pastedAsFile: "ጽሑፍ እንደ ፋይል ተያይዟል", reset: "ዳግም", settingsSaved: "መቼቶች ተቀምጠዋል",
-    readingPage: "ገጹን በማንበብ ላይ...", pageLoaded: "የገጹ ይዘት ተጭኗል", pageError: "ገጹን ማንበብ አልተቻለም (ደህንነት)"
+    readingPage: "ገጹን በማንበብ ላይ...", pageLoaded: "የገጹ ይዘት ተጭኗል", pageError: "ገጹን ማንበብ አልተቻለም (ደህንነት)",
+    selectionAttached: "የተመረጠው ጽሑፍ ተያይዟል"
   },
   om: {
     placeholder: "Ergaa barreessi...", modalTitle: "Qindaa'ina", apiKey: "Furtuu API", 
@@ -16,12 +25,12 @@ const TRANSLATIONS = {
     roleUser: "Isin", roleAI: "Gargaaraa",
     fileAttached: "Faayiliin qabsiifameera", parsing: "Dubbisaa...", errorRead: "Dogoggora",
     pastedAsFile: "Barreeffamni qabsiifameera", reset: "Haqi", settingsSaved: "Qindaa'inni kusameera",
-    readingPage: "Fuula dubbisaa jira...", pageLoaded: "Qabiyyeen fuulichaa fe'ameera", pageError: "Fuula dubbisuu hin dandeenye"
+    readingPage: "Fuula dubbisaa jira...", pageLoaded: "Qabiyyeen fuulichaa fe'ameera", pageError: "Fuula dubbisuu hin dandeenye",
+    selectionAttached: "Barreeffamni filatame qabsiifameera"
   }
 };
 
 function t(key) {
-  // Default to 'om' if not set
   const lang = document.getElementById("languageSelect").value || 'om';
   return TRANSLATIONS[lang][key] || TRANSLATIONS['om'][key]; 
 }
@@ -54,7 +63,6 @@ const els = {
   themeSelect: document.getElementById("themeSelect"),
   newChatBtn: document.getElementById("newChatBtn"),
   container: document.getElementById("messagesContainer"),
-  // Labels
   lblModalTitle: document.getElementById("lbl-modalTitle"),
   lblApiKey: document.getElementById("lbl-apiKey"),
   lblLang: document.getElementById("lbl-lang"),
@@ -72,10 +80,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.apiStatus.classList.add('show');
   }
   
-  // Default to 'om' (Afaan Oromoo)
   els.languageSelect.value = localStorage.getItem("LANG") || "om";
   els.themeSelect.value = localStorage.getItem("THEME") || "light";
-  applyTheme(els.themeSelect.value);
+  
+  // Apply theme again just in case
+  if (els.themeSelect.value === 'dark') document.documentElement.setAttribute("data-theme", "dark");
+  
   updateLabels();
 
   chats = JSON.parse(localStorage.getItem("CHAT_MSGS")) || [];
@@ -85,6 +95,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (data.pendingSelection) {
     handleSelectedText(data.pendingSelection);
     chrome.storage.local.remove("pendingSelection");
+  }
+});
+
+// --- REAL-TIME STORAGE LISTENER (For FAB) ---
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.pendingSelection) {
+    const newText = changes.pendingSelection.newValue;
+    if (newText) {
+      handleSelectedText(newText);
+      chrome.storage.local.remove("pendingSelection");
+    }
   }
 });
 
@@ -115,15 +136,12 @@ function applyTheme(theme) {
 // --- CORE LOGIC ---
 function handleSelectedText(text) {
   if (!text) return;
-  if (text.length > CONFIG.PASTE_THRESHOLD) {
-    currentAttachment = { name: "selection.txt", content: text };
-    els.fileName.textContent = "selection.txt";
-    els.attachmentPreview.classList.add("active");
-    Notiflix.Notify.success(t('pastedAsFile'));
-  } else {
-    els.promptInput.value = text;
-    els.promptInput.focus();
-  }
+  // Always attach selection as context
+  currentAttachment = { name: "selection.txt", content: text };
+  els.fileName.textContent = "selection.txt";
+  els.attachmentPreview.classList.add("active");
+  Notiflix.Notify.success(t('selectionAttached'));
+  els.promptInput.focus();
 }
 
 // --- CHAT WITH PAGE LOGIC ---
@@ -140,7 +158,10 @@ els.readPageBtn.onclick = async () => {
         const clone = document.body.cloneNode(true);
         const trash = clone.querySelectorAll('script, style, noscript, svg, img, iframe');
         trash.forEach(el => el.remove());
-        return clone.innerText.replace(/\s+/g, ' ').trim();
+        // Preserve structure
+        let text = clone.innerText;
+        text = text.replace(/\n{3,}/g, '\n\n'); 
+        return text.trim();
       }
     });
 

@@ -1,4 +1,4 @@
-// 1. Create the Context Menu on Install
+// 1. Create Context Menu
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "gargaaraa-context",
@@ -7,13 +7,23 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// 2. Handle the Click
+// 2. Handle Context Menu Click
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "gargaaraa-context") {
-    // Save the selected text to storage
-    chrome.storage.local.set({ "pendingSelection": info.selectionText }, () => {
-      // Open the side panel
-      chrome.sidePanel.open({ windowId: tab.windowId });
-    });
+    saveAndOpen(info.selectionText, tab.windowId);
   }
 });
+
+// 3. Handle Floating Button Click (Message from content.js)
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "open_gargaaraa_fab") {
+    saveAndOpen(request.text, sender.tab.windowId);
+  }
+});
+
+// Helper: Save text and open panel
+function saveAndOpen(text, windowId) {
+  chrome.storage.local.set({ "pendingSelection": text }, () => {
+    chrome.sidePanel.open({ windowId: windowId });
+  });
+}
