@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Gargaaraa AI Assistant",
-  "version": "1.4",
-  "description": "Context-aware AI assistant for Amharic and Afaan Oromoo.",
+  "version": "1.5",
+  "description": "Context-aware AI assistant with Smart Page Crawling.",
   "permissions": [
     "sidePanel",
     "contextMenus",

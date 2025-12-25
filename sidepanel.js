@@ -6,6 +6,11 @@ if (savedTheme === 'dark') {
   document.documentElement.setAttribute("data-theme", "dark");
 }
 
+// --- 2. FIX NOTIFLIX INIT ---
+Notiflix.Notify.init({ position: 'right-top', borderRadius: '8px', fontFamily: 'Inter', useIcon: true });
+Notiflix.Confirm.init({ borderRadius: '12px', titleColor: '#4f46e5', okButtonBackground: '#4f46e5', fontFamily: 'Inter', useGoogleFont: false });
+Notiflix.Report.init({ borderRadius: '12px', fontFamily: 'Inter' });
+
 // --- TRANSLATIONS ---
 const TRANSLATIONS = {
   am: {
@@ -83,9 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   els.languageSelect.value = localStorage.getItem("LANG") || "om";
   els.themeSelect.value = localStorage.getItem("THEME") || "light";
   
-  // Apply theme again just in case
-  if (els.themeSelect.value === 'dark') document.documentElement.setAttribute("data-theme", "dark");
-  
+  applyTheme(els.themeSelect.value);
   updateLabels();
 
   chats = JSON.parse(localStorage.getItem("CHAT_MSGS")) || [];
@@ -136,7 +139,6 @@ function applyTheme(theme) {
 // --- CORE LOGIC ---
 function handleSelectedText(text) {
   if (!text) return;
-  // Always attach selection as context
   currentAttachment = { name: "selection.txt", content: text };
   els.fileName.textContent = "selection.txt";
   els.attachmentPreview.classList.add("active");
@@ -144,7 +146,24 @@ function handleSelectedText(text) {
   els.promptInput.focus();
 }
 
-// --- CHAT WITH PAGE LOGIC ---
+// --- HELPER: FETCH & CLEAN URL ---
+async function fetchAndCleanUrl(url) {
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const trash = doc.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer, header');
+    trash.forEach(el => el.remove());
+    let text = doc.body.innerText;
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return text.substring(0, 3000);
+  } catch (e) {
+    return "";
+  }
+}
+
+// --- CHAT WITH PAGE LOGIC (SMART CRAWLING) ---
 els.readPageBtn.onclick = async () => {
   Notiflix.Loading.circle(t('readingPage'));
   
@@ -152,26 +171,49 @@ els.readPageBtn.onclick = async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error("No active tab");
 
+    // 1. Get Main Page Content & Links
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
         const clone = document.body.cloneNode(true);
-        const trash = clone.querySelectorAll('script, style, noscript, svg, img, iframe');
+        const links = Array.from(clone.querySelectorAll('a[href]'))
+          .map(a => a.href)
+          .filter(href => href.startsWith('http') && href.length > 25)
+          .filter((v, i, a) => a.indexOf(v) === i);
+
+        const trash = clone.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer');
         trash.forEach(el => el.remove());
-        // Preserve structure
-        let text = clone.innerText;
-        text = text.replace(/\n{3,}/g, '\n\n'); 
-        return text.trim();
+        
+        return {
+          text: clone.innerText.replace(/\n{3,}/g, '\n\n').trim(),
+          links: links.slice(0, 3) // Top 3 links
+        };
       }
     });
 
-    const pageText = result[0].result;
-    if (!pageText || pageText.length < 50) throw new Error("Page empty");
+    const { text: mainText, links } = result[0].result;
+    if (!mainText || mainText.length < 50) throw new Error("Page empty");
 
-    const truncatedText = pageText.substring(0, 20000);
+    // 2. Notify User
+    Notiflix.Loading.change(`Reading 3 linked pages...`);
+
+    // 3. Fetch Linked Pages
+    const subPagesContent = await Promise.all(
+      links.map(async (link) => {
+        const content = await fetchAndCleanUrl(link);
+        return content ? `\n\n--- LINKED CONTENT (${link}) ---\n${content}` : "";
+      })
+    );
+
+    // 4. Combine
+    const combinedText = `MAIN PAGE:\n${mainText.substring(0, 15000)}\n` + subPagesContent.join("");
     const title = tab.title || "Webpage";
 
-    currentAttachment = { name: `Web: ${title.substring(0, 15)}...`, content: truncatedText };
+    currentAttachment = { 
+      name: `Web: ${title.substring(0, 10)}... (+${links.length} links)`, 
+      content: combinedText 
+    };
+    
     els.fileName.textContent = currentAttachment.name;
     els.attachmentPreview.classList.add("active");
     

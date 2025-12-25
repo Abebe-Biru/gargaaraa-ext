@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gargaaraa</title>
 
-  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- LOCAL LIBRARIES -->
@@ -15,7 +14,6 @@
   <link rel="stylesheet" href="lib/highlight.css">
   <script src="lib/highlight.js"></script>
 
-  <!-- CSS Styles -->
   <style>
     :root {
       --bg-body: #f8fafc; --bg-sidebar: #ffffff; --bg-sidebar-hover: #f1f5f9; --bg-surface: #ffffff; --bg-input: #ffffff;
@@ -26,7 +24,6 @@
       --modal-bg: #ffffff; --modal-backdrop: rgba(255, 255, 255, 0.6);
       --transition-speed: 0.3s;
     }
-
     [data-theme="dark"] {
       --bg-body: #0f172a; --bg-sidebar: #020617; --bg-sidebar-hover: #1e293b; --bg-surface: #1e293b; --bg-input: #020617;
       --text-main: #f8fafc; --text-muted: #94a3b8; --text-sidebar: #cbd5e1;
@@ -35,7 +32,6 @@
       --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5); --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
       --modal-bg: #1e293b; --modal-backdrop: rgba(0, 0, 0, 0.7);
     }
-
     * { box-sizing: border-box; outline: none; }
     body { margin: 0; height: 100vh; font-family: 'Inter', 'Noto Sans Ethiopic', sans-serif; background: var(--bg-body); color: var(--text-main); overflow: hidden; }
 
@@ -63,19 +59,16 @@
     .avatar.user { background: var(--bg-sidebar-hover); color: var(--text-sidebar); }
     .msg-content { flex: 1; padding-top: 0; width: calc(100% - 38px); }
     .msg-name { font-size: 11px; font-weight: 600; margin-bottom: 2px; color: var(--text-main); }
-    
     .msg-bubble { font-size: 14px; line-height: 1.5; color: var(--text-main); word-break: break-word; }
     .msg-bubble p { margin: 0 0 0.5em 0; }
     .msg-bubble code { font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.08); padding: 2px 4px; border-radius: 4px; }
     [data-theme="dark"] .msg-bubble code { background: rgba(255,255,255,0.15); }
     .msg-bubble pre { background: #1e293b; color: #f8fafc; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-    
     .msg-row.user-row { justify-content: flex-end; display: flex; }
     .msg-row.user-row .msg-bubble { background: var(--msg-user-bg); color: var(--msg-user-text); padding: 8px 12px; border-radius: 10px; display: inline-block; }
     .msg-row.user-row .msg-bubble code { background: rgba(255,255,255,0.3); color: inherit; }
     .msg-row.ai-row { justify-content: flex-start; display: flex; margin-bottom: 10px; }
     .msg-row.ai-row .msg-bubble { background: var(--msg-ai-bg); border: 1px solid var(--border); padding: 8px 12px; border-radius: 10px; display: inline-block; }
-
     .thinking-dots { display: inline-flex; align-items: center; gap: 3px; height: 20px; }
     .dot { width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
     .dot:nth-child(1) { animation-delay: -0.32s; }
@@ -87,7 +80,6 @@
     .attachment-preview.active { display: flex; }
     .file-chip { display: flex; align-items: center; gap: 6px; background: var(--bg-surface); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; font-size: 12px; color: var(--text-main); }
     .remove-file-btn { background: none; border: none; color: #ef4444; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px; }
-    
     .input-box { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 4px; display: flex; align-items: center; gap: 4px; box-shadow: var(--shadow-lg); transition: border-color 0.2s; }
     .input-box:focus-within { border-color: var(--primary); }
     .attach-btn { background: transparent; border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
