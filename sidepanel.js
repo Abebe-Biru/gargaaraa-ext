@@ -70,7 +70,7 @@ const TRANSLATIONS = {
     apiKey: "Furtuu API", 
     lang: "Afaan Deebii", 
     theme: "Bifa", 
-    save: "Kusii", 
+    save: "Kuusi", 
     apiConf: "Sirreeffameera",
     reset: "Haqi",
     powered: "Addis AI dhaan deeggarame",
@@ -251,7 +251,7 @@ function handleSelectedText(text) {
   currentAttachment = { name: "selection.txt", content: text };
   els.fileName.textContent = "selection.txt";
   els.attachmentPreview.classList.add("active");
-  Notiflix.Notify.success(t('selectionAttached')); // Localized Toast
+  Notiflix.Notify.success(t("Kan filatame fe'ameera")); // Localized Toast
   els.promptInput.focus();
 }
 
