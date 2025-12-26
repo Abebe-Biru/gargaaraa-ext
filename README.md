@@ -2,6 +2,8 @@
 
 ### *Your Intelligent Bridge to the Web.*
 
+![Version](https://img.shields.io/badge/version-1.4-blue) ![Manifest](https://img.shields.io/badge/manifest-V3-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
 **Gargaaraa** is your AI companion for the web, fluent in **Afaan Oromoo** and **Amharic**. Chat with websites, documents, and text instantly.
 
 ## 🛠️ How to Install
