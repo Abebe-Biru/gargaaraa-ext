@@ -1,4 +1,4 @@
-# Gargaaraa AI Assistant 🇪🇹
+# Gargaaraa
 
 ### *Your Intelligent Bridge to the Web.*
 
