@@ -50,7 +50,7 @@ function createButton(top, left, text) {
   gargaaraaBtn.style.top = `${top}px`;
   gargaaraaBtn.style.left = `${left}px`;
   
-  const iconUrl = chrome.runtime.getURL("icon.png");
+  const iconUrl = chrome.runtime.getURL("icons/icon.png");
   gargaaraaBtn.style.backgroundImage = `url(${iconUrl})`;
   gargaaraaBtn.setAttribute("title", "Ask Gargaaraa");
 
