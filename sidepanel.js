@@ -1,51 +1,133 @@
-// --- 1. FIX CSP: Initialize Worker & Theme Immediately ---
+// --- 1. INITIALIZATION & CONFIG ---
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
 
-const savedTheme = localStorage.getItem("THEME");
-if (savedTheme === 'dark') {
-  document.documentElement.setAttribute("data-theme", "dark");
-}
-
-// --- 2. FIX NOTIFLIX INIT ---
-Notiflix.Notify.init({ position: 'right-top', borderRadius: '8px', fontFamily: 'Inter', useIcon: true });
-Notiflix.Confirm.init({ borderRadius: '12px', titleColor: '#4f46e5', okButtonBackground: '#4f46e5', fontFamily: 'Inter', useGoogleFont: false });
-Notiflix.Report.init({ borderRadius: '12px', fontFamily: 'Inter' });
-
-// --- TRANSLATIONS ---
-const TRANSLATIONS = {
-  am: {
-    placeholder: "መልእክት ይጻፉ...", modalTitle: "መቼቶች", apiKey: "የኤፒአይ ቁልፍ", 
-    lang: "የምላሽ ቋንቋ", theme: "ገጽታ", save: "አስቀምጥ", apiConf: "ተስተካክሏል",
-    welcomeTitle: "ሰላም!", welcomeText: "እኔ ጋርጋራ ነኝ። ምን ልርዳዎ?",
-    roleUser: "እርስዎ", roleAI: "ጋርጋራ",
-    fileAttached: "ፋይል ተያይዟል", parsing: "በማንበብ ላይ...", errorRead: "ስህተት",
-    pastedAsFile: "ጽሑፍ እንደ ፋይል ተያይዟል", reset: "ዳግም", settingsSaved: "መቼቶች ተቀምጠዋል",
-    readingPage: "ገጹን በማንበብ ላይ...", pageLoaded: "የገጹ ይዘት ተጭኗል", pageError: "ገጹን ማንበብ አልተቻለም (ደህንነት)",
-    selectionAttached: "የተመረጠው ጽሑፍ ተያይዟል"
-  },
-  om: {
-    placeholder: "Ergaa barreessi...", modalTitle: "Qindaa'ina", apiKey: "Furtuu API", 
-    lang: "Afaan Deebii", theme: "Bifa", save: "Kusii", apiConf: "Sirreeffameera",
-    welcomeTitle: "Akkam!", welcomeText: "Ani Gargaaraa dha. Maal si gargaaru?",
-    roleUser: "Isin", roleAI: "Gargaaraa",
-    fileAttached: "Faayiliin qabsiifameera", parsing: "Dubbisaa...", errorRead: "Dogoggora",
-    pastedAsFile: "Barreeffamni qabsiifameera", reset: "Haqi", settingsSaved: "Qindaa'inni kusameera",
-    readingPage: "Fuula dubbisaa jira...", pageLoaded: "Qabiyyeen fuulichaa fe'ameera", pageError: "Fuula dubbisuu hin dandeenye",
-    selectionAttached: "Barreeffamni filatame qabsiifameera"
-  }
-};
-
-function t(key) {
-  const lang = document.getElementById("languageSelect").value || 'om';
-  return TRANSLATIONS[lang][key] || TRANSLATIONS['om'][key]; 
-}
-
-// --- CONFIG ---
 const CONFIG = { CONTEXT_WINDOW_SIZE: 6, TYPING_SPEED: 10, PASTE_THRESHOLD: 500 };
 let currentAttachment = null;
 let chats = []; 
 
-// --- DOM ---
+// --- 2. TRANSLATION DICTIONARY (EXHAUSTIVE) ---
+const TRANSLATIONS = {
+  am: {
+    // UI Labels
+    placeholder: "መልእክት ይጻፉ...", 
+    modalTitle: "መቼቶች", 
+    apiKey: "የኤፒአይ ቁልፍ", 
+    lang: "የምላሽ ቋንቋ", 
+    theme: "ገጽታ", 
+    save: "አስቀምጥ", 
+    apiConf: "ተስተካክሏል",
+    reset: "ዳግም",
+    powered: "በ Addis AI የተጎለበተ",
+    
+    // Tooltips (Hover Text)
+    tooltipNewChat: "አዲስ ውይይት ጀምር",
+    tooltipSettings: "መቼቶች",
+    tooltipReadPage: "ይህንን ገጽ ያንብቡ (Chat with Page)",
+    tooltipAttach: "ፋይል አያይዝ (PDF/TXT)",
+    tooltipRemoveFile: "ፋይሉን አስወግድ",
+    
+    // Chat Roles
+    roleUser: "እርስዎ", 
+    roleAI: "ጋርጋራ",
+    
+    // Welcome Screen
+    welcomeTitle: "ሰላም!", 
+    welcomeText: "እኔ ጋርጋራ ነኝ። ምን ልርዳዎ?",
+    
+    // Notifications & Status
+    fileAttached: "ፋይል ተያይዟል", 
+    parsing: "ፋይሉን በማንበብ ላይ...", 
+    errorRead: "ፋይሉን ማንበብ አልተቻለም",
+    pastedAsFile: "ረጅም ጽሑፍ እንደ ፋይል ተያይዟል", 
+    settingsSaved: "መቼቶች ተቀምጠዋል",
+    chatCleared: "ውይይቱ ጸድቷል",
+    
+    // Page Reading Logic
+    readingPage: "ገጹን በማንበብ ላይ...", 
+    readingLinks: "ተያያዥ ሊንኮችን በማንበብ ላይ...",
+    pageLoaded: "የገጹ ይዘት ተጭኗል", 
+    pageError: "ገጹን ማንበብ አልተቻለም (የደህንነት ገደብ)",
+    pageEmpty: "ይህ ገጽ ባዶ ነው ወይም ሊነበብ አልቻለም",
+    
+    // Alerts
+    alertKeyMissing: "የኤፒአይ ቁልፍ የለም",
+    alertKeyDesc: "እባክዎ ለመወያየት በመቼቶች ውስጥ የኤፒአይ ቁልፍ ያስገቡ።",
+    alertKeySaved: "የኤፒአይ ቁልፍ ተቀምጧል",
+    alertKeyResetTitle: "ኤፒአይ ቁልፍን ዳግም አስጀምር",
+    alertKeyResetText: "ይህ የአሁኑን የኤፒአይ ቁልፍ ያስወግዳል። መቀጠል ይፈልጋሉ?",
+    alertDelTitle: "ውይይቱን ሰርዝ",
+    alertDelText: "ይህን ውይይት መሰረዝ ይፈልጋሉ?",
+    alertDelSuccess: "ውይይቱ ተሰርዟል",
+    btnYes: "አዎ", 
+    btnCancel: "ይቅር",
+    btnDelete: "ሰርዝ",
+    networkError: "የኔትወርክ ችግር አጋጥሟል"
+  },
+  om: {
+    // UI Labels
+    placeholder: "Ergaa barreessi...", 
+    modalTitle: "Qindaa'ina", 
+    apiKey: "Furtuu API", 
+    lang: "Afaan Deebii", 
+    theme: "Bifa", 
+    save: "Kusii", 
+    apiConf: "Sirreeffameera",
+    reset: "Haqi",
+    powered: "Addis AI dhaan deeggarame",
+
+    // Tooltips
+    tooltipNewChat: "Haasaa haaraa jalqabi",
+    tooltipSettings: "Qindaa'ina ban",
+    tooltipReadPage: "Fuula kana dubbisi (Chat with Page)",
+    tooltipAttach: "Faayilii qabsiisi (PDF/TXT)",
+    tooltipRemoveFile: "Faayilii haqi",
+
+    // Chat Roles
+    roleUser: "Isin", 
+    roleAI: "Gargaaraa",
+
+    // Welcome Screen
+    welcomeTitle: "Akkam!", 
+    welcomeText: "Ani Gargaaraa dha. Maal si gargaaru?",
+
+    // Notifications & Status
+    fileAttached: "Faayiliin qabsiifameera", 
+    parsing: "Dubbisaa jira...", 
+    errorRead: "Faayilii dubbisuu hin dandeenye",
+    pastedAsFile: "Barreeffamni dheeraan qabsiifameera", 
+    settingsSaved: "Qindaa'inni kusameera",
+    chatCleared: "Haasaan haqameera",
+
+    // Page Reading Logic
+    readingPage: "Fuula dubbisaa jira...", 
+    readingLinks: "Geessituuwwan walqabatan dubbisaa...",
+    pageLoaded: "Qabiyyeen fuulichaa fe'ameera", 
+    pageError: "Fuula dubbisuu hin dandeenye (Eegumsa)",
+    pageEmpty: "Fuulli kun duwwaa dha yookiin dubbisuun hin danda'amne",
+
+    // Alerts
+    alertKeyMissing: "Furtuun API hin jiru",
+    alertKeyDesc: "Maaloo haasaa jalqabuuf qindaa'ina keessa Furtuu API galchi.",
+    alertKeySaved: "Furtuun API kusameera",
+    alertKeyResetTitle: "Furtuu API Haqi",
+    alertKeyResetText: "Kuni Furtuu API amma irra jiru ni haqa. Itti fufuu?",
+    alertDelTitle: "Haasaa Haqi",
+    alertDelText: "Haasaa kana haqquu barbaaddaa?",
+    alertDelSuccess: "Haasaan haqameera",
+    btnYes: "Eeyyee", 
+    btnCancel: "Dhiisi",
+    btnDelete: "Haqi",
+    networkError: "Rakkoo neetworkii"
+  }
+};
+
+// Helper to get text
+function t(key) {
+  const lang = document.getElementById("languageSelect").value || 'om';
+  return TRANSLATIONS[lang][key] || TRANSLATIONS['om'][key] || key; 
+}
+
+// --- DOM ELEMENTS ---
 const els = {
   app: document.getElementById("app"),
   messagesList: document.getElementById("messagesList"),
@@ -68,32 +150,43 @@ const els = {
   themeSelect: document.getElementById("themeSelect"),
   newChatBtn: document.getElementById("newChatBtn"),
   container: document.getElementById("messagesContainer"),
+  // Labels for Localization
   lblModalTitle: document.getElementById("lbl-modalTitle"),
   lblApiKey: document.getElementById("lbl-apiKey"),
   lblLang: document.getElementById("lbl-lang"),
   lblTheme: document.getElementById("lbl-theme"),
-  lblApiConf: document.getElementById("lbl-apiConf")
+  lblApiConf: document.getElementById("lbl-apiConf"),
+  lblPowered: document.getElementById("lbl-powered")
 };
+
+// --- NOTIFLIX INIT ---
+Notiflix.Notify.init({ position: 'right-top', borderRadius: '8px', fontFamily: 'Inter', useIcon: true });
+Notiflix.Confirm.init({ borderRadius: '12px', titleColor: '#4f46e5', okButtonBackground: '#4f46e5', fontFamily: 'Inter', useGoogleFont: false });
+Notiflix.Report.init({ borderRadius: '12px', fontFamily: 'Inter' });
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', async () => {
   els.app.classList.add('loaded');
   
+  // Load API Key State
   const key = localStorage.getItem("API_KEY");
   if(key) {
     els.apiKeyInput.style.display = 'none';
     els.apiStatus.classList.add('show');
   }
   
+  // Load Preferences
   els.languageSelect.value = localStorage.getItem("LANG") || "om";
   els.themeSelect.value = localStorage.getItem("THEME") || "light";
   
   applyTheme(els.themeSelect.value);
-  updateLabels();
+  updateLabels(); // Apply localization immediately
 
+  // Load Chat
   chats = JSON.parse(localStorage.getItem("CHAT_MSGS")) || [];
   renderMessages();
 
+  // Check for Context from Background (Right Click)
   const data = await chrome.storage.local.get("pendingSelection");
   if (data.pendingSelection) {
     handleSelectedText(data.pendingSelection);
@@ -112,8 +205,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
-// --- LOCALIZATION & THEME ---
+// --- LOCALIZATION & THEME LOGIC ---
 function updateLabels() {
+  // 1. Static Text
   els.promptInput.placeholder = t('placeholder');
   els.lblModalTitle.textContent = t('modalTitle');
   els.lblApiKey.textContent = t('apiKey');
@@ -122,17 +216,32 @@ function updateLabels() {
   els.saveSettingsBtn.textContent = t('save');
   els.lblApiConf.textContent = t('apiConf');
   els.resetApiKey.textContent = t('reset');
-  if(chats.length > 0) renderMessages();
+  if(els.lblPowered) els.lblPowered.textContent = t('powered');
+
+  // 2. Tooltips (Hover Text)
+  els.newChatBtn.title = t('tooltipNewChat');
+  els.openSettingsBtn.title = t('tooltipSettings');
+  els.readPageBtn.title = t('tooltipReadPage');
+  els.attachBtn.title = t('tooltipAttach');
+  els.removeFileBtn.title = t('tooltipRemoveFile');
+
+  // 3. Refresh Chat UI (Updates Roles "You"/"Gargaaraa" and Welcome Screen)
+  renderMessages();
 }
 
 function applyTheme(theme) {
   if (theme === 'dark') document.documentElement.setAttribute("data-theme", "dark");
   else document.documentElement.removeAttribute("data-theme");
   
+  // Update Notiflix Colors based on theme
   if(theme === 'dark') {
     Notiflix.Notify.merge({ background: '#1e293b', textColor: '#fff' });
+    Notiflix.Confirm.merge({ backgroundColor: '#1e293b', titleColor: '#818cf8', messageColor: '#cbd5e1', okButtonBackground: '#6366f1' });
+    Notiflix.Report.merge({ backgroundColor: '#1e293b', titleColor: '#818cf8', messageColor: '#cbd5e1', backOverlayColor: 'rgba(0,0,0,0.8)' });
   } else {
     Notiflix.Notify.merge({ background: '#fff', textColor: '#000' });
+    Notiflix.Confirm.merge({ backgroundColor: '#fff', titleColor: '#4f46e5', messageColor: '#1e293b', okButtonBackground: '#4f46e5' });
+    Notiflix.Report.merge({ backgroundColor: '#fff', titleColor: '#4f46e5', messageColor: '#1e293b', backOverlayColor: 'rgba(255,255,255,0.5)' });
   }
 }
 
@@ -142,36 +251,18 @@ function handleSelectedText(text) {
   currentAttachment = { name: "selection.txt", content: text };
   els.fileName.textContent = "selection.txt";
   els.attachmentPreview.classList.add("active");
-  Notiflix.Notify.success(t('selectionAttached'));
+  Notiflix.Notify.success(t('selectionAttached')); // Localized Toast
   els.promptInput.focus();
 }
 
-// --- HELPER: FETCH & CLEAN URL ---
-async function fetchAndCleanUrl(url) {
-  try {
-    const res = await fetch(url);
-    const html = await res.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const trash = doc.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer, header');
-    trash.forEach(el => el.remove());
-    let text = doc.body.innerText;
-    text = text.replace(/\n{3,}/g, '\n\n').trim();
-    return text.substring(0, 3000);
-  } catch (e) {
-    return "";
-  }
-}
-
-// --- CHAT WITH PAGE LOGIC (SMART CRAWLING) ---
+// --- CHAT WITH PAGE LOGIC ---
 els.readPageBtn.onclick = async () => {
-  Notiflix.Loading.circle(t('readingPage'));
+  Notiflix.Loading.circle(t('readingPage')); // Localized Loading
   
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error("No active tab");
 
-    // 1. Get Main Page Content & Links
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
@@ -186,18 +277,18 @@ els.readPageBtn.onclick = async () => {
         
         return {
           text: clone.innerText.replace(/\n{3,}/g, '\n\n').trim(),
-          links: links.slice(0, 3) // Top 3 links
+          links: links.slice(0, 3)
         };
       }
     });
 
     const { text: mainText, links } = result[0].result;
-    if (!mainText || mainText.length < 50) throw new Error("Page empty");
+    if (!mainText || mainText.length < 50) throw new Error(t('pageEmpty'));
 
-    // 2. Notify User
-    Notiflix.Loading.change(`Reading 3 linked pages...`);
+    // Notify User about deep crawling
+    Notiflix.Loading.change(t('readingLinks'));
 
-    // 3. Fetch Linked Pages
+    // Fetch Linked Pages
     const subPagesContent = await Promise.all(
       links.map(async (link) => {
         const content = await fetchAndCleanUrl(link);
@@ -205,12 +296,11 @@ els.readPageBtn.onclick = async () => {
       })
     );
 
-    // 4. Combine
     const combinedText = `MAIN PAGE:\n${mainText.substring(0, 15000)}\n` + subPagesContent.join("");
     const title = tab.title || "Webpage";
 
     currentAttachment = { 
-      name: `Web: ${title.substring(0, 10)}... (+${links.length} links)`, 
+      name: `Web: ${title.substring(0, 10)}... (+${links.length})`, 
       content: combinedText 
     };
     
@@ -226,6 +316,22 @@ els.readPageBtn.onclick = async () => {
     Notiflix.Loading.remove();
   }
 };
+
+async function fetchAndCleanUrl(url) {
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const trash = doc.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer, header');
+    trash.forEach(el => el.remove());
+    let text = doc.body.innerText;
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return text.substring(0, 3000);
+  } catch (e) {
+    return "";
+  }
+}
 
 // --- FILE HANDLING ---
 els.attachBtn.onclick = () => els.fileInput.click();
@@ -338,7 +444,10 @@ async function sendMessage() {
   const apiKey = localStorage.getItem("API_KEY");
   
   if (!apiKey) {
-    els.settingsModal.classList.add("open");
+    Notiflix.Report.warning(t('alertKeyMissing'), t('alertKeyDesc'), t('modalTitle'), () => {
+        els.settingsModal.classList.add("open");
+        setTimeout(() => els.apiKeyInput.focus(), 200);
+    });
     return;
   }
   if (!text) return;
@@ -386,7 +495,7 @@ async function sendMessage() {
     renderMessages();
   } catch (err) {
     loadingRow.remove();
-    Notiflix.Notify.failure("Error: " + err.message);
+    Notiflix.Notify.failure(t('networkError'));
   }
 }
 
@@ -411,16 +520,21 @@ els.saveSettingsBtn.onclick = () => {
 };
 
 els.resetApiKey.onclick = () => {
-  localStorage.removeItem("API_KEY");
-  els.apiStatus.classList.remove('show');
-  els.apiKeyInput.style.display = 'block';
-  els.apiKeyInput.focus();
+  Notiflix.Confirm.show(t('alertKeyResetTitle'), t('alertKeyResetText'), t('btnYes'), t('btnCancel'), () => {
+    localStorage.removeItem("API_KEY");
+    els.apiStatus.classList.remove('show');
+    els.apiKeyInput.style.display = 'block';
+    els.apiKeyInput.focus();
+  });
 };
 
 els.newChatBtn.onclick = () => {
-  chats = [];
-  currentAttachment = null;
-  els.attachmentPreview.classList.remove("active");
-  localStorage.removeItem("CHAT_MSGS");
-  renderMessages();
+  Notiflix.Confirm.show(t('alertDelTitle'), t('alertDelText'), t('btnDelete'), t('btnCancel'), () => {
+    chats = [];
+    currentAttachment = null;
+    els.attachmentPreview.classList.remove("active");
+    localStorage.removeItem("CHAT_MSGS");
+    renderMessages();
+    Notiflix.Notify.info(t('chatCleared'));
+  }, null, { okButtonBackground: '#ef4444' });
 };
