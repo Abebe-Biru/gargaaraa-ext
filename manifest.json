@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Gargaaraa AI Assistant",
-  "version": "1.5",
-  "description": "Context-aware AI assistant with Smart Page Crawling.",
+  "version": "1.6",
+  "description": "Context-aware AI assistant with Smart Page Crawling and Citations.",
   "permissions": [
     "sidePanel",
     "contextMenus",

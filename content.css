@@ -17,3 +17,19 @@
 }
 .gargaaraa-fab.visible { opacity: 1; transform: scale(1); }
 .gargaaraa-fab:hover { transform: scale(1.15); box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3), 0 0 0 2px rgba(255, 255, 255, 1); }
+
+/* --- NEW: CITATION HIGHLIGHT EFFECT --- */
+.gargaaraa-citation-highlight {
+  background-color: rgba(254, 240, 138, 0.8) !important; /* Soft Yellow */
+  color: #000 !important;
+  border-radius: 3px;
+  box-shadow: 0 0 0 4px rgba(254, 240, 138, 0.4);
+  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+  animation: gargaaraa-pulse 2s ease-in-out;
+}
+
+@keyframes gargaaraa-pulse {
+  0% { background-color: rgba(254, 240, 138, 0.2); }
+  50% { background-color: rgba(254, 240, 138, 1); box-shadow: 0 0 10px rgba(254, 240, 138, 0.8); }
+  100% { background-color: rgba(254, 240, 138, 0.8); }
+}

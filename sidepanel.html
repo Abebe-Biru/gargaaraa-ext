@@ -7,7 +7,6 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- LOCAL LIBRARIES -->
   <script src="lib/notiflix.js"></script>
   <script src="lib/pdf.js"></script>
   <script src="lib/marked.js"></script>
@@ -15,7 +14,7 @@
   <script src="lib/highlight.js"></script>
 
   <style>
-    /* ... (Keep your existing CSS) ... */
+    /* ... (Existing CSS) ... */
     :root {
       --bg-body: #f8fafc; --bg-sidebar: #ffffff; --bg-sidebar-hover: #f1f5f9; --bg-surface: #ffffff; --bg-input: #ffffff;
       --text-main: #0f172a; --text-muted: #64748b; --text-sidebar: #475569;
@@ -102,6 +101,40 @@
     .api-status { font-size: 11px; color: var(--success); margin-top: 4px; display: none; }
     .api-status.show { display: block; }
     .reset-link { font-size: 11px; color: var(--text-muted); text-decoration: underline; cursor: pointer; margin-left: 8px; }
+
+    /* --- CITATION BUTTONS --- */
+    .citation-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(79, 70, 229, 0.1);
+      color: var(--primary);
+      border: 1px solid rgba(79, 70, 229, 0.3);
+      border-radius: 4px;
+      padding: 0px 4px;
+      margin: 0 2px;
+      font-size: 0.85em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      vertical-align: middle;
+    }
+    .citation-btn:hover {
+      background-color: var(--primary);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    [data-theme="dark"] .citation-btn {
+      background-color: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+    [data-theme="dark"] .citation-btn:hover {
+      background-color: #6366f1;
+      color: white;
+    }
   </style>
 </head>
 <body>

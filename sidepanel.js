@@ -3,7 +3,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
 
 const CONFIG = { CONTEXT_WINDOW_SIZE: 6, TYPING_SPEED: 10, PASTE_THRESHOLD: 500 };
 let currentAttachment = null;
-let chats = []; 
+let chats = [];
+let pageContextChunks = []; // NEW: Store chunks for citations
 
 // --- 2. TRANSLATION DICTIONARY (EXHAUSTIVE) ---
 const TRANSLATIONS = {
@@ -255,53 +256,63 @@ function handleSelectedText(text) {
   els.promptInput.focus();
 }
 
-// --- CHAT WITH PAGE LOGIC ---
+// --- MODIFIED: CHAT WITH PAGE LOGIC (CHUNKING FOR CITATIONS) ---
 els.readPageBtn.onclick = async () => {
-  Notiflix.Loading.circle(t('readingPage')); // Localized Loading
+  Notiflix.Loading.circle(t('readingPage'));
   
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error("No active tab");
 
+    // We use executeScript to get DOM elements, not just text, for better chunking
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const clone = document.body.cloneNode(true);
-        const links = Array.from(clone.querySelectorAll('a[href]'))
-          .map(a => a.href)
-          .filter(href => href.startsWith('http') && href.length > 25)
-          .filter((v, i, a) => a.indexOf(v) === i);
+        // Helper to clean text
+        const clean = (text) => text.replace(/\s+/g, ' ').trim();
 
-        const trash = clone.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer');
-        trash.forEach(el => el.remove());
-        
+        // Identify valuable block elements to create meaningful chunks
+        const blocks = document.querySelectorAll('p, li, h1, h2, h3, h4, blockquote, article, section, td');
+        let chunks = [];
+        let seen = new Set(); // Dedup
+
+        blocks.forEach((el) => {
+          // Filter out invisible or tiny elements
+          if (el.offsetParent === null) return; 
+          const text = clean(el.innerText);
+          
+          if (text.length > 25 && !seen.has(text)) {
+            seen.add(text);
+            chunks.push(text);
+          }
+        });
+
+        // Fallback if blocks failed (e.g. plain text site)
+        if (chunks.length === 0) {
+            chunks = document.body.innerText.split('\n\n').map(clean).filter(t => t.length > 25);
+        }
+
         return {
-          text: clone.innerText.replace(/\n{3,}/g, '\n\n').trim(),
-          links: links.slice(0, 3)
+          chunks: chunks.slice(0, 150), // Limit to avoid token overflow
+          title: document.title
         };
       }
     });
 
-    const { text: mainText, links } = result[0].result;
-    if (!mainText || mainText.length < 50) throw new Error(t('pageEmpty'));
+    const { chunks, title } = result[0].result;
+    
+    if (!chunks || chunks.length === 0) throw new Error(t('pageEmpty'));
 
-    // Notify User about deep crawling
-    Notiflix.Loading.change(t('readingLinks'));
+    // Save chunks globally so we can look them up when user clicks [1]
+    pageContextChunks = chunks;
 
-    // Fetch Linked Pages
-    const subPagesContent = await Promise.all(
-      links.map(async (link) => {
-        const content = await fetchAndCleanUrl(link);
-        return content ? `\n\n--- LINKED CONTENT (${link}) ---\n${content}` : "";
-      })
-    );
-
-    const combinedText = `MAIN PAGE:\n${mainText.substring(0, 15000)}\n` + subPagesContent.join("");
-    const title = tab.title || "Webpage";
+    // Create a formatted context string for the AI: [1] Text... [2] Text...
+    const formattedContext = chunks.map((text, i) => `[${i + 1}] ${text}`).join("\n\n");
 
     currentAttachment = { 
-      name: `Web: ${title.substring(0, 10)}... (+${links.length})`, 
-      content: combinedText 
+      name: `Web: ${title.substring(0, 15)}...`, 
+      content: formattedContext,
+      isPageContext: true // Flag to tell system this uses citation logic
     };
     
     els.fileName.textContent = currentAttachment.name;
@@ -317,23 +328,7 @@ els.readPageBtn.onclick = async () => {
   }
 };
 
-async function fetchAndCleanUrl(url) {
-  try {
-    const res = await fetch(url);
-    const html = await res.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const trash = doc.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer, header');
-    trash.forEach(el => el.remove());
-    let text = doc.body.innerText;
-    text = text.replace(/\n{3,}/g, '\n\n').trim();
-    return text.substring(0, 3000);
-  } catch (e) {
-    return "";
-  }
-}
-
-// --- FILE HANDLING ---
+// --- FILE HANDLING (PDF/TXT) ---
 els.attachBtn.onclick = () => els.fileInput.click();
 
 els.fileInput.onchange = async (e) => {
@@ -355,7 +350,7 @@ els.fileInput.onchange = async (e) => {
       text = await file.text();
     }
     if (text) {
-      currentAttachment = { name: file.name, content: text };
+      currentAttachment = { name: file.name, content: text, isPageContext: false };
       els.fileName.textContent = file.name;
       els.attachmentPreview.classList.add("active");
       Notiflix.Notify.success(t('fileAttached'));
@@ -370,10 +365,11 @@ els.fileInput.onchange = async (e) => {
 
 els.removeFileBtn.onclick = () => {
   currentAttachment = null;
+  pageContextChunks = [];
   els.attachmentPreview.classList.remove("active");
 };
 
-// --- CHAT RENDER ---
+// --- MODIFIED: CHAT RENDER (CLICKABLE CITATIONS) ---
 function renderMessages() {
   els.messagesList.innerHTML = "";
   
@@ -409,7 +405,15 @@ function renderMessages() {
     if (msg.role === 'user') {
       bubble.textContent = msg.text;
     } else {
-      bubble.innerHTML = marked.parse(msg.text);
+      // 1. Parse Markdown
+      let htmlContent = marked.parse(msg.text);
+      
+      // 2. Convert [1], [2] into clickable buttons
+      htmlContent = htmlContent.replace(/\[(\d+)\]/g, (match, number) => {
+        return `<button class="citation-btn" onclick="handleCitationClick(${number})">[${number}]</button>`;
+      });
+
+      bubble.innerHTML = htmlContent;
       bubble.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     }
 
@@ -424,6 +428,29 @@ function renderMessages() {
   
   els.container.scrollTop = els.container.scrollHeight;
 }
+
+// --- NEW: GLOBAL HANDLER FOR CITATION CLICKS ---
+// Attached to window so the HTML onclick works
+window.handleCitationClick = async (index) => {
+  const chunkIndex = parseInt(index) - 1; // Convert 1-based to 0-based
+  
+  // Check if we have chunks loaded
+  if (!pageContextChunks || !pageContextChunks[chunkIndex]) {
+    Notiflix.Notify.failure("Source text not found in current context.");
+    return;
+  }
+
+  const chunkText = pageContextChunks[chunkIndex];
+  
+  // Send message to Content Script
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { 
+      action: "scroll_to_text", 
+      text: chunkText 
+    });
+  }
+};
 
 // --- SENDING ---
 els.sendBtn.onclick = sendMessage;
@@ -473,7 +500,16 @@ async function sendMessage() {
   // Build Prompt
   let fullPrompt = "";
   if (currentAttachment) {
-    fullPrompt += `DOCUMENT CONTEXT (${currentAttachment.name}):\n${currentAttachment.content}\n\n`;
+    if (currentAttachment.isPageContext) {
+      // CITATION PROMPT
+      fullPrompt += `SYSTEM: You are analyzing a webpage. The content below is divided into numbered chunks like [1], [2]. 
+      Always use these numbers to cite your answers (e.g., "The price is high [1]"). 
+      Only use information provided in these chunks. Do not hallucinate content.\n\n`;
+      fullPrompt += `DOCUMENT CONTEXT:\n${currentAttachment.content}\n\n`;
+    } else {
+      // NORMAL FILE PROMPT
+      fullPrompt += `DOCUMENT CONTEXT (${currentAttachment.name}):\n${currentAttachment.content}\n\n`;
+    }
   }
   const recentMsgs = chats.slice(-CONFIG.CONTEXT_WINDOW_SIZE);
   recentMsgs.forEach(m => fullPrompt += `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}\n`);
