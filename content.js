@@ -1,6 +1,6 @@
 let gargaaraaBtn = null;
 
-// --- EXISTING FAB LOGIC ---
+// --- FAB LOGIC ---
 document.addEventListener("mouseup", (event) => {
   const selection = window.getSelection();
   const selectedText = selection.toString().trim();
@@ -73,59 +73,27 @@ function removeButton() {
   }
 }
 
-// --- NEW: CITATION SCROLLING LOGIC ---
+// --- CITATION & SCROLL LOGIC ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "scroll_to_text") {
-    findAndScroll(request.text);
-  }
-});
-
-function findAndScroll(textSnippet) {
-  if (!textSnippet) return;
-
-  // 1. Prepare search string (take first 60 chars to avoid whitespace mismatches across long blocks)
-  // We clean it to ensure correct matching
-  const searchStr = textSnippet.replace(/\s+/g, ' ').trim().substring(0, 60);
-
-  // 2. Clear previous highlights
-  document.querySelectorAll('.gargaaraa-citation-highlight').forEach(el => {
-    el.classList.remove('gargaaraa-citation-highlight');
-  });
-
-  // 3. Use window.find to locate text
-  // Reset selection
-  window.getSelection().removeAllRanges();
-  
-  // (aString, aCaseSensitive, aBackwards, aWrapAround, aWholeWord, aSearchInFrames, aShowDialog)
-  // Using fuzzy-ish find logic via window.find which is robust for this use case
-  const found = window.find(searchStr, false, false, true, false, true, false);
-
-  if (found) {
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      let element = range.startContainer;
-      
-      // Navigate up if text node
-      if (element.nodeType === 3) {
-        element = element.parentElement;
-      }
-
-      // Scroll smoothly
+  if (request.action === "scroll_to_chunk") {
+    const element = document.querySelector(`[data-g-id="${request.chunkId}"]`);
+    
+    if (element) {
+      // 1. Scroll into view
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      // Apply Highlight Class
-      element.classList.add('gargaaraa-citation-highlight');
-
-      // Remove after 3 seconds
+      
+      // 2. Highlight effect
+      element.classList.add('gargaaraa-highlight');
+      
+      // 3. Remove highlight after 2.5 seconds
       setTimeout(() => {
-        element.classList.remove('gargaaraa-citation-highlight');
-      }, 3000);
+        element.classList.remove('gargaaraa-highlight');
+      }, 2500);
+      
+      sendResponse({ status: "found" });
+    } else {
+      sendResponse({ status: "not_found" });
     }
-  } else {
-    console.log("Gargaaraa: Exact match not found for citation.");
   }
-  
-  // Clear selection so it doesn't look messy
-  window.getSelection().removeAllRanges();
-}
+  return true; 
+});

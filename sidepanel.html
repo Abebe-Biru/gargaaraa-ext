@@ -1,3 +1,5 @@
+--- START OF FILE sidepanel.html ---
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,6 +9,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
+  <!-- LOCAL LIBRARIES -->
   <script src="lib/notiflix.js"></script>
   <script src="lib/pdf.js"></script>
   <script src="lib/marked.js"></script>
@@ -14,7 +17,6 @@
   <script src="lib/highlight.js"></script>
 
   <style>
-    /* ... (Existing CSS) ... */
     :root {
       --bg-body: #f8fafc; --bg-sidebar: #ffffff; --bg-sidebar-hover: #f1f5f9; --bg-surface: #ffffff; --bg-input: #ffffff;
       --text-main: #0f172a; --text-muted: #64748b; --text-sidebar: #475569;
@@ -23,6 +25,7 @@
       --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05); --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
       --modal-bg: #ffffff; --modal-backdrop: rgba(255, 255, 255, 0.6);
       --transition-speed: 0.3s;
+      --cite-bg: #e0e7ff; --cite-text: #4338ca; --cite-hover: #c7d2fe;
     }
     [data-theme="dark"] {
       --bg-body: #0f172a; --bg-sidebar: #020617; --bg-sidebar-hover: #1e293b; --bg-surface: #1e293b; --bg-input: #020617;
@@ -31,6 +34,7 @@
       --msg-user-bg: #3730a3; --msg-user-text: #e0e7ff; --msg-ai-bg: #1e293b;
       --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5); --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
       --modal-bg: #1e293b; --modal-backdrop: rgba(0, 0, 0, 0.7);
+      --cite-bg: #312e81; --cite-text: #e0e7ff; --cite-hover: #4338ca;
     }
     * { box-sizing: border-box; outline: none; }
     body { margin: 0; height: 100vh; font-family: 'Inter', 'Noto Sans Ethiopic', sans-serif; background: var(--bg-body); color: var(--text-main); overflow: hidden; }
@@ -69,6 +73,28 @@
     .msg-row.user-row .msg-bubble code { background: rgba(255,255,255,0.3); color: inherit; }
     .msg-row.ai-row { justify-content: flex-start; display: flex; margin-bottom: 10px; }
     .msg-row.ai-row .msg-bubble { background: var(--msg-ai-bg); border: 1px solid var(--border); padding: 8px 12px; border-radius: 10px; display: inline-block; }
+    
+    /* CITATION BUTTON STYLES */
+    .citation-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 18px;
+      padding: 0 4px;
+      margin: 0 2px;
+      background-color: var(--cite-bg);
+      color: var(--cite-text);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      vertical-align: super;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .citation-btn:hover { background-color: var(--cite-hover); transform: translateY(-1px); }
+
     .thinking-dots { display: inline-flex; align-items: center; gap: 3px; height: 20px; }
     .dot { width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
     .dot:nth-child(1) { animation-delay: -0.32s; }
@@ -101,40 +127,6 @@
     .api-status { font-size: 11px; color: var(--success); margin-top: 4px; display: none; }
     .api-status.show { display: block; }
     .reset-link { font-size: 11px; color: var(--text-muted); text-decoration: underline; cursor: pointer; margin-left: 8px; }
-
-    /* --- CITATION BUTTONS --- */
-    .citation-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background-color: rgba(79, 70, 229, 0.1);
-      color: var(--primary);
-      border: 1px solid rgba(79, 70, 229, 0.3);
-      border-radius: 4px;
-      padding: 0px 4px;
-      margin: 0 2px;
-      font-size: 0.85em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-      vertical-align: middle;
-    }
-    .citation-btn:hover {
-      background-color: var(--primary);
-      color: white;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    [data-theme="dark"] .citation-btn {
-      background-color: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      border-color: rgba(99, 102, 241, 0.4);
-    }
-    [data-theme="dark"] .citation-btn:hover {
-      background-color: #6366f1;
-      color: white;
-    }
   </style>
 </head>
 <body>

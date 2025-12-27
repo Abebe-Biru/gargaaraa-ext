@@ -3,8 +3,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
 
 const CONFIG = { CONTEXT_WINDOW_SIZE: 6, TYPING_SPEED: 10, PASTE_THRESHOLD: 500 };
 let currentAttachment = null;
-let chats = [];
-let pageContextChunks = []; // NEW: Store chunks for citations
+let chats = []; 
 
 // --- 2. TRANSLATION DICTIONARY (EXHAUSTIVE) ---
 const TRANSLATIONS = {
@@ -62,7 +61,8 @@ const TRANSLATIONS = {
     btnYes: "አዎ", 
     btnCancel: "ይቅር",
     btnDelete: "ሰርዝ",
-    networkError: "የኔትወርክ ችግር አጋጥሟል"
+    networkError: "የኔትወርክ ችግር አጋጥሟል",
+    scrolledTo: "ወደ ምንጩ ተንቀሳቅሷል"
   },
   om: {
     // UI Labels
@@ -118,7 +118,8 @@ const TRANSLATIONS = {
     btnYes: "Eeyyee", 
     btnCancel: "Dhiisi",
     btnDelete: "Haqi",
-    networkError: "Rakkoo neetworkii"
+    networkError: "Rakkoo neetworkii",
+    scrolledTo: "Madda isaa agarsiisaa jira"
   }
 };
 
@@ -206,6 +207,27 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
+// --- EVENT DELEGATION FOR CITATIONS ---
+els.messagesList.addEventListener('click', async (e) => {
+  if (e.target.classList.contains('citation-btn')) {
+    e.preventDefault();
+    const chunkId = e.target.getAttribute('data-id');
+    
+    // We need to send this to the active tab to scroll
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+        chrome.tabs.sendMessage(tab.id, { action: "scroll_to_chunk", chunkId: chunkId }, (response) => {
+           if(chrome.runtime.lastError) {
+             // Tab might have been closed or reloaded
+             console.log("Could not scroll");
+           } else if(response && response.status === 'found') {
+             Notiflix.Notify.info(t('scrolledTo') + ` [${chunkId}]`);
+           }
+        });
+    }
+  }
+});
+
 // --- LOCALIZATION & THEME LOGIC ---
 function updateLabels() {
   // 1. Static Text
@@ -256,63 +278,69 @@ function handleSelectedText(text) {
   els.promptInput.focus();
 }
 
-// --- MODIFIED: CHAT WITH PAGE LOGIC (CHUNKING FOR CITATIONS) ---
+// --- CHAT WITH PAGE LOGIC (UPDATED FOR CITATIONS) ---
 els.readPageBtn.onclick = async () => {
-  Notiflix.Loading.circle(t('readingPage'));
+  Notiflix.Loading.circle(t('readingPage')); // Localized Loading
   
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error("No active tab");
 
-    // We use executeScript to get DOM elements, not just text, for better chunking
+    // 1. Inject Script to Tag DOM Elements and Extract Text
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        // Helper to clean text
-        const clean = (text) => text.replace(/\s+/g, ' ').trim();
-
-        // Identify valuable block elements to create meaningful chunks
-        const blocks = document.querySelectorAll('p, li, h1, h2, h3, h4, blockquote, article, section, td');
-        let chunks = [];
-        let seen = new Set(); // Dedup
-
-        blocks.forEach((el) => {
-          // Filter out invisible or tiny elements
-          if (el.offsetParent === null) return; 
-          const text = clean(el.innerText);
-          
-          if (text.length > 25 && !seen.has(text)) {
-            seen.add(text);
-            chunks.push(text);
-          }
+        // Tagging Logic
+        let index = 1;
+        const mainContent = [];
+        
+        // Target readable elements
+        const targets = document.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+        
+        targets.forEach(el => {
+            const text = el.innerText.trim();
+            if (text.length > 20 && el.offsetParent !== null) { // Visible and substantial
+                el.setAttribute('data-g-id', index); // Tag the DOM
+                mainContent.push(`[ID: ${index}] ${text}`);
+                index++;
+            }
         });
 
-        // Fallback if blocks failed (e.g. plain text site)
-        if (chunks.length === 0) {
-            chunks = document.body.innerText.split('\n\n').map(clean).filter(t => t.length > 25);
-        }
+        // Also get links for sub-pages (keep existing logic)
+        const links = Array.from(document.querySelectorAll('a[href]'))
+          .map(a => a.href)
+          .filter(href => href.startsWith('http') && href.length > 25)
+          .filter((v, i, a) => a.indexOf(v) === i);
 
         return {
-          chunks: chunks.slice(0, 150), // Limit to avoid token overflow
-          title: document.title
+          chunkedText: mainContent.join('\n\n'),
+          links: links.slice(0, 3)
         };
       }
     });
 
-    const { chunks, title } = result[0].result;
+    const { chunkedText, links } = result[0].result;
     
-    if (!chunks || chunks.length === 0) throw new Error(t('pageEmpty'));
+    if (!chunkedText || chunkedText.length < 50) throw new Error(t('pageEmpty'));
 
-    // Save chunks globally so we can look them up when user clicks [1]
-    pageContextChunks = chunks;
+    // Notify User about deep crawling (if needed)
+    Notiflix.Loading.change(t('readingLinks'));
 
-    // Create a formatted context string for the AI: [1] Text... [2] Text...
-    const formattedContext = chunks.map((text, i) => `[${i + 1}] ${text}`).join("\n\n");
+    // Fetch Linked Pages (Note: Linked pages cannot be scrolled to easily via citations as they aren't in the DOM)
+    const subPagesContent = await Promise.all(
+      links.map(async (link) => {
+        const content = await fetchAndCleanUrl(link);
+        return content ? `\n\n--- LINKED CONTENT (${link}) ---\n${content}` : "";
+      })
+    );
+
+    // Combine formatted text
+    const combinedText = `MAIN PAGE CONTENT (Use [ID] for citations):\n${chunkedText.substring(0, 15000)}\n` + subPagesContent.join("");
+    const title = tab.title || "Webpage";
 
     currentAttachment = { 
-      name: `Web: ${title.substring(0, 15)}...`, 
-      content: formattedContext,
-      isPageContext: true // Flag to tell system this uses citation logic
+      name: `Web: ${title.substring(0, 10)}... (+${links.length})`, 
+      content: combinedText 
     };
     
     els.fileName.textContent = currentAttachment.name;
@@ -328,7 +356,23 @@ els.readPageBtn.onclick = async () => {
   }
 };
 
-// --- FILE HANDLING (PDF/TXT) ---
+async function fetchAndCleanUrl(url) {
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const trash = doc.querySelectorAll('script, style, noscript, svg, img, iframe, nav, footer, header');
+    trash.forEach(el => el.remove());
+    let text = doc.body.innerText;
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return text.substring(0, 3000);
+  } catch (e) {
+    return "";
+  }
+}
+
+// --- FILE HANDLING ---
 els.attachBtn.onclick = () => els.fileInput.click();
 
 els.fileInput.onchange = async (e) => {
@@ -350,7 +394,7 @@ els.fileInput.onchange = async (e) => {
       text = await file.text();
     }
     if (text) {
-      currentAttachment = { name: file.name, content: text, isPageContext: false };
+      currentAttachment = { name: file.name, content: text };
       els.fileName.textContent = file.name;
       els.attachmentPreview.classList.add("active");
       Notiflix.Notify.success(t('fileAttached'));
@@ -365,11 +409,10 @@ els.fileInput.onchange = async (e) => {
 
 els.removeFileBtn.onclick = () => {
   currentAttachment = null;
-  pageContextChunks = [];
   els.attachmentPreview.classList.remove("active");
 };
 
-// --- MODIFIED: CHAT RENDER (CLICKABLE CITATIONS) ---
+// --- CHAT RENDER ---
 function renderMessages() {
   els.messagesList.innerHTML = "";
   
@@ -405,15 +448,24 @@ function renderMessages() {
     if (msg.role === 'user') {
       bubble.textContent = msg.text;
     } else {
-      // 1. Parse Markdown
-      let htmlContent = marked.parse(msg.text);
+      // 1. Render Markdown
+      let rawHtml = marked.parse(msg.text);
       
-      // 2. Convert [1], [2] into clickable buttons
-      htmlContent = htmlContent.replace(/\[(\d+)\]/g, (match, number) => {
-        return `<button class="citation-btn" onclick="handleCitationClick(${number})">[${number}]</button>`;
+      // 2. Post-process to turn [1, 2] into clickable buttons [1] [2]
+      // Regex finds any bracketed list of numbers e.g. [1] or [1, 2, 5]
+      rawHtml = rawHtml.replace(/\[\s*([\d\s,]+)\s*\]/g, (match, innerContent) => {
+          // Split by comma and clean up whitespace
+          const ids = innerContent.split(',').map(s => s.trim()).filter(s => /^\d+$/.test(s));
+          
+          if (ids.length === 0) return match; // Return original if no valid numbers
+
+          // Map each ID to a button
+          return ids.map(id => 
+            `<button class="citation-btn" data-id="${id}" title="Click to scroll to this section">[${id}]</button>`
+          ).join(''); // Join them together (side by side)
       });
 
-      bubble.innerHTML = htmlContent;
+      bubble.innerHTML = rawHtml;
       bubble.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     }
 
@@ -428,29 +480,6 @@ function renderMessages() {
   
   els.container.scrollTop = els.container.scrollHeight;
 }
-
-// --- NEW: GLOBAL HANDLER FOR CITATION CLICKS ---
-// Attached to window so the HTML onclick works
-window.handleCitationClick = async (index) => {
-  const chunkIndex = parseInt(index) - 1; // Convert 1-based to 0-based
-  
-  // Check if we have chunks loaded
-  if (!pageContextChunks || !pageContextChunks[chunkIndex]) {
-    Notiflix.Notify.failure("Source text not found in current context.");
-    return;
-  }
-
-  const chunkText = pageContextChunks[chunkIndex];
-  
-  // Send message to Content Script
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { 
-      action: "scroll_to_text", 
-      text: chunkText 
-    });
-  }
-};
 
 // --- SENDING ---
 els.sendBtn.onclick = sendMessage;
@@ -499,18 +528,19 @@ async function sendMessage() {
 
   // Build Prompt
   let fullPrompt = "";
-  if (currentAttachment) {
-    if (currentAttachment.isPageContext) {
-      // CITATION PROMPT
-      fullPrompt += `SYSTEM: You are analyzing a webpage. The content below is divided into numbered chunks like [1], [2]. 
-      Always use these numbers to cite your answers (e.g., "The price is high [1]"). 
-      Only use information provided in these chunks. Do not hallucinate content.\n\n`;
-      fullPrompt += `DOCUMENT CONTEXT:\n${currentAttachment.content}\n\n`;
-    } else {
-      // NORMAL FILE PROMPT
-      fullPrompt += `DOCUMENT CONTEXT (${currentAttachment.name}):\n${currentAttachment.content}\n\n`;
-    }
+  
+  // Custom instruction for citations
+  let systemInst = "You are a helpful assistant. ";
+  if (currentAttachment && currentAttachment.name.startsWith("Web:")) {
+      systemInst += "Answer based on the MAIN PAGE CONTENT provided. The content is chunked with IDs like [ID: 1]. When you use information from a specific chunk, cite it using the format [1], [2] at the end of the sentence. ";
   }
+
+  if (currentAttachment) {
+    fullPrompt += `SYSTEM: ${systemInst}\n\nDOCUMENT CONTEXT (${currentAttachment.name}):\n${currentAttachment.content}\n\n`;
+  } else {
+    fullPrompt += `SYSTEM: ${systemInst}\n\n`;
+  }
+
   const recentMsgs = chats.slice(-CONFIG.CONTEXT_WINDOW_SIZE);
   recentMsgs.forEach(m => fullPrompt += `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}\n`);
   fullPrompt += `User: ${text}\nAssistant:`;
