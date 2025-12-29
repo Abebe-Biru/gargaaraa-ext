@@ -4,23 +4,40 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
 const CONFIG = { CONTEXT_WINDOW_SIZE: 6, TYPING_SPEED: 10, PASTE_THRESHOLD: 500 };
 let currentAttachment = null;
 let chats = []; 
-let sessions = []; // Stores all history
+let sessions = []; 
 let activeSessionId = null;
 
-// --- 2. TRANSLATION DICTIONARY ---
+// --- 2. PROMPT TEMPLATES (MAGIC MENU) ---
+const PROMPT_TEMPLATES = {
+    om: [
+        { cmd: "/cuunfi", desc: "Barreeffama kana gabaabsi (Summarize)", val: "Barreeffama kana gabaabsi: " },
+        { cmd: "/tarreessi", desc: "Qabxiilee gurguddoo tarreessi (List)", val: "Qabxiilee gurguddoo barreeffama kanaa tarreessi: " },
+        { cmd: "/hiiki", desc: "Gara Afaan Oromootti hiiki (Translate)", val: "Barreeffama kana gara Afaan Oromootti hiiki: " },
+        { cmd: "/sirreessi", desc: "Dogoggora seera luga sirreessi (Fix)", val: "Dogoggora seera lugaa fi qubeessuu barreeffama kanaa sirreessi: " },
+        { cmd: "/ibsi", desc: "Waa'ee kanaa ibsi (Explain)", val: "Waa'ee kanaa bal'inaan ibsi: " }
+    ],
+    am: [
+        { cmd: "/aqla", desc: "ይህንን ጽሑፍ አሳጥረህ አቅርብ (Summarize)", val: "ይህንን ጽሑፍ አሳጥረህ አቅርብ: " },
+        { cmd: "/zirzir", desc: "ዋና ዋና ነጥቦችን በዝርዝር አስቀምጥ (List)", val: "የዚህን ጽሑፍ ዋና ዋና ነጥቦች በዝርዝር አስቀምጥ: " },
+        { cmd: "/tergum", desc: "ወደ አማርኛ ተርጉም (Translate)", val: "ይህንን ጽሑፍ ወደ አማርኛ ተርጉም: " },
+        { cmd: "/arem", desc: "የሰዋሰው ስህተቶችን አርም (Fix)", val: "የዚህን ጽሑፍ የሰዋሰው እና የፊደል ስህተቶች አርም: " },
+        { cmd: "/abrara", desc: "ይህንን አብራራ (Explain)", val: "ይህንን ጽንሰ-ሀሳብ በደንብ አብራራ: " }
+    ]
+};
+
+// --- 3. TRANSLATION DICTIONARY ---
 const TRANSLATIONS = {
   am: {
-    placeholder: "መልእክት ይጻፉ...", 
+    placeholder: "መልእክት ይጻፉ... (ለትዕዛዝ / ይጠቀሙ)", 
     modalTitle: "መቼቶች", 
     apiKey: "የኤፒአይ ቁልፍ", 
     lang: "የምላሽ ቋንቋ", 
     theme: "ገጽታ", 
     save: "አስቀምጥ", 
     apiConf: "ተስተካክሏል", 
-    reset: "ዳግም",
+    reset: "ዳግም", 
     powered: "በ Addis AI የተጎለበተ",
     
-    // Tooltips
     tooltipNewChat: "አዲስ ውይይት ጀምር",
     tooltipSettings: "መቼቶች",
     tooltipReadPage: "ይህንን ገጽ ያንብቡ",
@@ -61,21 +78,21 @@ const TRANSLATIONS = {
     btnMd: "እንደ Markdown",
     
     btnYes: "አዎ", 
-    btnCancel: "ይቅር",
-    btnDelete: "ሰርዝ",
+    btnCancel: "ይቅር", 
+    btnDelete: "ሰርዝ", 
     networkError: "የኔትወርክ ችግር አጋጥሟል",
     scrolledTo: "ወደ ምንጩ ተንቀሳቅሷል",
     newChatTitle: "አዲስ ውይይት"
   },
   om: {
-    placeholder: "Ergaa barreessi...", 
+    placeholder: "Ergaa barreessi... (Ajajaaf / fayyadami)", 
     modalTitle: "Qindaa'ina", 
     apiKey: "Furtuu API", 
     lang: "Afaan Deebii", 
     theme: "Bifa", 
     save: "Kuusi", 
-    apiConf: "Sirreeffameera",
-    reset: "Haqi",
+    apiConf: "Sirreeffameera", 
+    reset: "Haqi", 
     powered: "Addis AI dhaan deeggarame",
 
     tooltipNewChat: "Haasaa haaraa jalqabi",
@@ -118,8 +135,8 @@ const TRANSLATIONS = {
     btnMd: "Akka Markdown",
 
     btnYes: "Eeyyee", 
-    btnCancel: "Dhiisi",
-    btnDelete: "Haqi",
+    btnCancel: "Dhiisi", 
+    btnDelete: "Haqi", 
     networkError: "Rakkoo neetworkii",
     scrolledTo: "Madda isaa agarsiisaa jira",
     newChatTitle: "Haasaa Haaraa"
@@ -154,12 +171,14 @@ const els = {
   themeSelect: document.getElementById("themeSelect"),
   newChatBtn: document.getElementById("newChatBtn"),
   container: document.getElementById("messagesContainer"),
-  // Search & History Elements
+  // Search & History
   exportChatBtn: document.getElementById("exportChatBtn"),
   toggleSearchBtn: document.getElementById("toggleSearchBtn"),
   historyOverlay: document.getElementById("historyOverlay"),
   historyList: document.getElementById("historyList"),
   historySearchInput: document.getElementById("historySearchInput"),
+  // Magic Menu
+  promptMenu: document.getElementById("promptMenu"),
   
   lblModalTitle: document.getElementById("lbl-modalTitle"),
   lblApiKey: document.getElementById("lbl-apiKey"),
@@ -176,7 +195,6 @@ Notiflix.Confirm.init({ borderRadius: '12px', titleColor: '#4f46e5', okButtonBac
 document.addEventListener('DOMContentLoaded', async () => {
   els.app.classList.add('loaded');
   
-  // Load Configs
   const key = localStorage.getItem("API_KEY");
   if(key) {
     els.apiKeyInput.style.display = 'none';
@@ -187,36 +205,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   applyTheme(els.themeSelect.value);
   updateLabels();
 
-  // Load Sessions
   sessions = JSON.parse(localStorage.getItem("CHAT_SESSIONS")) || [];
-  
-  // Legacy Migration (if user had old single-session format)
   const legacyChats = JSON.parse(localStorage.getItem("CHAT_MSGS"));
   if (legacyChats && legacyChats.length > 0 && sessions.length === 0) {
      const newId = Date.now().toString();
-     sessions.push({ 
-       id: newId, 
-       title: "Previous Chat", 
-       timestamp: Date.now(), 
-       messages: legacyChats 
-     });
+     sessions.push({ id: newId, title: "Previous Chat", timestamp: Date.now(), messages: legacyChats });
      localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
      localStorage.removeItem("CHAT_MSGS");
      activeSessionId = newId;
      chats = legacyChats;
   } else if (sessions.length > 0) {
-      // Load most recent session
       const lastSession = sessions[0];
       activeSessionId = lastSession.id;
       chats = lastSession.messages;
   } else {
-      // New User
       createNewSessionId();
   }
 
   renderMessages();
 
-  // Check for Context (Right Click)
   const data = await chrome.storage.local.get("pendingSelection");
   if (data.pendingSelection) {
     handleSelectedText(data.pendingSelection);
@@ -234,6 +241,110 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
+// --- HELPER: UPDATE SEND BUTTON STATE ---
+function updateSendButtonState() {
+    const val = els.promptInput.value.trim();
+    // Enable if there is text OR if the user is typing a command (e.g., "/")
+    els.sendBtn.disabled = val.length === 0;
+}
+
+// --- PROMPT MENU LOGIC (MAGIC MENU) ---
+let selectedPromptIndex = -1;
+
+els.promptInput.addEventListener('input', (e) => {
+  const val = e.target.value;
+  updateSendButtonState(); // Update button state on input
+
+  // Check if input starts with '/'
+  if (val.startsWith('/')) {
+    const lang = els.languageSelect.value || 'om';
+    const templates = PROMPT_TEMPLATES[lang] || PROMPT_TEMPLATES['om'];
+    
+    const query = val.substring(1).toLowerCase();
+    const filtered = templates.filter(t => t.cmd.toLowerCase().includes(query));
+
+    if (filtered.length > 0) {
+      renderPromptMenu(filtered);
+    } else {
+      closePromptMenu();
+    }
+  } else {
+    closePromptMenu();
+  }
+});
+
+// --- KEYBOARD NAVIGATION & ENTER ---
+els.promptInput.addEventListener('keydown', (e) => {
+  if (e.isComposing) return; 
+
+  const menuActive = els.promptMenu.classList.contains('active');
+  
+  if (menuActive) {
+    const items = els.promptMenu.querySelectorAll('.prompt-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedPromptIndex = (selectedPromptIndex + 1) % items.length;
+      updatePromptSelection(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedPromptIndex = (selectedPromptIndex - 1 + items.length) % items.length;
+      updatePromptSelection(items);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation(); 
+      if (selectedPromptIndex >= 0 && items[selectedPromptIndex]) {
+        items[selectedPromptIndex].click();
+      }
+    } else if (e.key === 'Escape') {
+      closePromptMenu();
+    }
+  } else {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+});
+
+function closePromptMenu() {
+    els.promptMenu.classList.remove('active');
+    selectedPromptIndex = -1;
+}
+
+function renderPromptMenu(items) {
+  els.promptMenu.innerHTML = "";
+  selectedPromptIndex = 0; 
+
+  items.forEach((item, index) => {
+    const div = document.createElement("div");
+    div.className = `prompt-item ${index === 0 ? 'selected' : ''}`;
+    div.innerHTML = `<span class="prompt-cmd">${item.cmd}</span><span class="prompt-desc">${item.desc}</span>`;
+    
+    div.onclick = () => {
+      els.promptInput.value = item.val;
+      closePromptMenu();
+      updateSendButtonState();
+      els.promptInput.focus();
+      els.promptInput.selectionStart = els.promptInput.selectionEnd = els.promptInput.value.length;
+    };
+    
+    els.promptMenu.appendChild(div);
+  });
+  
+  els.promptMenu.classList.add('active');
+}
+
+function updatePromptSelection(items) {
+  items.forEach((item, idx) => {
+    if (idx === selectedPromptIndex) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
 // --- SESSION MANAGEMENT ---
 function createNewSessionId() {
     activeSessionId = Date.now().toString();
@@ -244,30 +355,17 @@ function createNewSessionId() {
 }
 
 function saveSession() {
-    // Find index of current session
     const index = sessions.findIndex(s => s.id === activeSessionId);
-    
-    // Generate Title from first user message
     let title = t('newChatTitle');
     const firstMsg = chats.find(m => m.role === 'user');
     if (firstMsg) {
         title = firstMsg.text.substring(0, 30) + (firstMsg.text.length > 30 ? "..." : "");
     }
+    const sessionData = { id: activeSessionId, title: title, timestamp: Date.now(), messages: chats };
 
-    const sessionData = {
-        id: activeSessionId,
-        title: title,
-        timestamp: Date.now(),
-        messages: chats
-    };
-
-    if (index > -1) {
-        sessions[index] = sessionData; // Update existing
-    } else {
-        if(chats.length > 0) sessions.unshift(sessionData); // Create new if content exists
-    }
+    if (index > -1) { sessions[index] = sessionData; } 
+    else { if(chats.length > 0) sessions.unshift(sessionData); }
     
-    // Sort by newest
     sessions.sort((a,b) => b.timestamp - a.timestamp);
     localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
 }
@@ -277,7 +375,7 @@ function loadSession(id) {
     if(session) {
         activeSessionId = session.id;
         chats = session.messages;
-        currentAttachment = null; // Attachments are session-specific but transient in this implementation
+        currentAttachment = null;
         els.attachmentPreview.classList.remove("active");
         renderMessages();
         els.historyOverlay.classList.remove("open");
@@ -290,17 +388,12 @@ function deleteSession(id, event) {
     Notiflix.Confirm.show(t('alertDelTitle'), t('alertDelText'), t('btnDelete'), t('btnCancel'), () => {
         sessions = sessions.filter(s => s.id !== id);
         localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
-        
-        // If we deleted the active one, clear view
-        if(id === activeSessionId) {
-            createNewSessionId();
-            renderMessages();
-        }
+        if(id === activeSessionId) { createNewSessionId(); renderMessages(); }
         renderHistoryList(els.historySearchInput.value);
     }, null, { okButtonBackground: '#ef4444' });
 }
 
-// --- HISTORY OVERLAY & SEARCH ---
+// --- HISTORY OVERLAY ---
 els.toggleSearchBtn.onclick = () => {
   const isOpen = els.historyOverlay.classList.contains('open');
   if (isOpen) {
@@ -314,15 +407,11 @@ els.toggleSearchBtn.onclick = () => {
   }
 };
 
-els.historySearchInput.addEventListener('input', (e) => {
-    renderHistoryList(e.target.value);
-});
+els.historySearchInput.addEventListener('input', (e) => { renderHistoryList(e.target.value); });
 
 function renderHistoryList(query = "") {
     els.historyList.innerHTML = "";
     const lowerQ = query.toLowerCase();
-    
-    // Filter sessions based on title or message content
     const filtered = sessions.filter(s => {
         if(!query) return true;
         const inTitle = s.title.toLowerCase().includes(lowerQ);
@@ -338,9 +427,7 @@ function renderHistoryList(query = "") {
     filtered.forEach(s => {
         const item = document.createElement("div");
         item.className = `history-item ${s.id === activeSessionId ? 'active' : ''}`;
-        
         const dateStr = new Date(s.timestamp).toLocaleDateString();
-        
         item.innerHTML = `
             <div class="history-title">${s.title}</div>
             <div class="history-meta">
@@ -350,42 +437,55 @@ function renderHistoryList(query = "") {
                 </button>
             </div>
         `;
-        
         item.onclick = () => loadSession(s.id);
         item.querySelector('.delete-chat-btn').onclick = (e) => deleteSession(s.id, e);
-        
         els.historyList.appendChild(item);
     });
 }
 
-// --- NEW CHAT BUTTON (Archiving Logic) ---
 els.newChatBtn.onclick = () => {
-    // 1. If current chat is empty, just focus input
-    if (chats.length === 0) {
-        els.promptInput.focus();
-        return;
-    }
-    
-    // 2. Save current session (already handled on send, but good to ensure)
+    if (chats.length === 0) { els.promptInput.focus(); return; }
     saveSession();
-    
-    // 3. Create fresh session
     createNewSessionId();
     renderMessages();
     Notiflix.Notify.success(t('chatCleared'));
 };
 
-// --- REST OF CORE LOGIC (Citations, Export, Send) ---
-
-// Citation Click Handler
+// --- FAIL-SAFE CITATION SCROLL ---
 els.messagesList.addEventListener('click', async (e) => {
   if (e.target.classList.contains('citation-btn')) {
     e.preventDefault();
     const id = e.target.getAttribute('data-id');
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
     if (tab) {
       chrome.tabs.sendMessage(tab.id, { action: "scroll_to_citation", id: id }, (response) => {
-        if (response && response.status === 'found') {
+        if (chrome.runtime.lastError || !response) {
+            chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (targetId) => {
+                    const element = document.querySelector(`[data-g-id="${targetId}"]`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        const originalBg = element.style.backgroundColor;
+                        const originalTrans = element.style.transition;
+                        element.style.transition = "background-color 2s ease-out";
+                        element.style.backgroundColor = "rgba(255, 255, 0, 0.5)";
+                        setTimeout(() => {
+                            element.style.backgroundColor = originalBg;
+                            element.style.transition = originalTrans;
+                        }, 2500);
+                        return "found";
+                    }
+                    return "not_found";
+                },
+                args: [id]
+            }).then((results) => {
+                if(results && results[0] && results[0].result === 'found') {
+                    Notiflix.Notify.info(t('scrolledTo') + ` [${id}]`);
+                }
+            });
+        } else if (response.status === 'found') {
           Notiflix.Notify.info(t('scrolledTo') + ` [${id}]`);
         }
       });
@@ -393,7 +493,6 @@ els.messagesList.addEventListener('click', async (e) => {
   }
 });
 
-// Export Feature
 els.exportChatBtn.onclick = () => {
   if (chats.length === 0) return;
   Notiflix.Confirm.show(t('exportTitle'), t('exportDesc'), t('btnPdf'), t('btnMd'), 
@@ -587,13 +686,12 @@ function renderMessages() {
   els.container.scrollTop = els.container.scrollHeight;
 }
 
-els.sendBtn.onclick = sendMessage;
-els.promptInput.addEventListener("keydown", (e) => { if(e.key === "Enter") sendMessage(); });
-els.promptInput.addEventListener("input", () => { els.sendBtn.disabled = els.promptInput.value.trim() === ""; });
-els.promptInput.addEventListener('paste', (e) => {
-  const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-  if (pastedText.length > CONFIG.PASTE_THRESHOLD) { e.preventDefault(); handleSelectedText(pastedText); }
-});
+// --- SEND MESSAGE LOGIC (Updated to fix button) ---
+els.sendBtn.onclick = () => {
+    // Force close menu if user clicks send
+    closePromptMenu();
+    sendMessage();
+};
 
 async function sendMessage() {
   const text = els.promptInput.value.trim();
@@ -603,10 +701,12 @@ async function sendMessage() {
     return;
   }
   if (!text) return;
+  
   chats.push({ role: 'user', text: text });
-  saveSession(); // Save on every message
+  saveSession();
   renderMessages();
   els.promptInput.value = "";
+  updateSendButtonState();
   els.sendBtn.disabled = true;
 
   const loadingRow = document.createElement("div");
@@ -638,7 +738,7 @@ async function sendMessage() {
     const reply = data?.data?.response_text || "Error.";
     loadingRow.remove();
     chats.push({ role: 'assistant', text: reply });
-    saveSession(); // Save AI reply
+    saveSession(); 
     renderMessages();
   } catch (err) { loadingRow.remove(); Notiflix.Notify.failure(t('networkError')); }
 }
