@@ -1,6 +1,6 @@
 let gargaaraaBtn = null;
 
-// --- FAB LOGIC ---
+// --- EXISTING FAB LOGIC ---
 document.addEventListener("mouseup", (event) => {
   const selection = window.getSelection();
   const selectedText = selection.toString().trim();
@@ -73,19 +73,21 @@ function removeButton() {
   }
 }
 
-// --- CITATION & SCROLL LOGIC ---
+// --- NEW: Handle Citation Scrolling ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "scroll_to_chunk") {
-    const element = document.querySelector(`[data-g-id="${request.chunkId}"]`);
+  if (request.action === "scroll_to_citation") {
+    const targetId = request.id;
+    // Find the element with the matching data attribute
+    const element = document.querySelector(`[data-g-id="${targetId}"]`);
     
     if (element) {
-      // 1. Scroll into view
+      // Smooth scroll to the element
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
-      // 2. Highlight effect
+      // Apply highlight effect
       element.classList.add('gargaaraa-highlight');
       
-      // 3. Remove highlight after 2.5 seconds
+      // Remove highlight after animation
       setTimeout(() => {
         element.classList.remove('gargaaraa-highlight');
       }, 2500);
@@ -95,5 +97,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: "not_found" });
     }
   }
-  return true; 
 });
