@@ -14,7 +14,7 @@
   <script src="lib/highlight.js"></script>
 
   <style>
-    /* ... (CSS Variables & General Styles - Same as previous) ... */
+    /* ... (CSS Variables - Unchanged) ... */
     :root {
       --bg-body: #f8fafc; --bg-sidebar: #ffffff; --bg-sidebar-hover: #f1f5f9; --bg-surface: #ffffff; --bg-input: #ffffff;
       --text-main: #0f172a; --text-muted: #64748b; --text-sidebar: #475569;
@@ -37,7 +37,7 @@
     * { box-sizing: border-box; outline: none; }
     body { margin: 0; height: 100vh; font-family: 'Inter', 'Noto Sans Ethiopic', sans-serif; background: var(--bg-body); color: var(--text-main); overflow: hidden; }
 
-    .app { display: flex; height: 100%; flex-direction: column; opacity: 0; transition: opacity 0.5s; }
+    .app { display: flex; height: 100%; flex-direction: column; opacity: 0; transition: opacity 0.5s; position: relative; }
     .app.loaded { opacity: 1; }
 
     .header { height: 50px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--bg-body); color: var(--text-main); font-weight: 600; justify-content: space-between; position: relative; z-index: 10; }
@@ -45,19 +45,40 @@
     .header-actions { display: flex; gap: 4px; }
     .icon-btn { background: transparent; border: none; padding: 6px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
     .icon-btn:hover { background: var(--bg-sidebar-hover); color: var(--text-main); }
+    .icon-btn.active { background: var(--bg-sidebar-hover); color: var(--primary); }
 
-    .search-bar-container {
-        height: 0;
-        overflow: hidden;
-        background: var(--bg-body);
-        transition: height 0.2s ease, padding 0.2s ease;
-        border-bottom: 1px solid var(--border);
+    /* HISTORY OVERLAY STYLES */
+    .history-overlay {
+      position: absolute;
+      top: 50px; left: 0; right: 0; bottom: 0;
+      background: var(--bg-body);
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      padding: 0;
+      animation: slideIn 0.2s ease-out;
     }
-    .search-bar-container.open { height: 46px; padding: 8px 16px; }
-    .search-input { width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 13px; }
+    .history-overlay.open { display: flex; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .history-search-container { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .history-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .history-item { 
+      padding: 12px; margin-bottom: 4px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; 
+      transition: all 0.2s; 
+    }
+    .history-item:hover { background: var(--bg-sidebar-hover); }
+    .history-item.active { background: var(--bg-surface); border-color: var(--border); }
+    .history-title { font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .delete-chat-btn { font-size: 14px; padding: 2px 6px; color: #ef4444; background: none; border: none; cursor: pointer; opacity: 0; transition: opacity 0.2s; }
+    .history-item:hover .delete-chat-btn { opacity: 1; }
+
+    /* ... (Rest of existing styles) ... */
+    .search-input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 13px; }
 
     @media print {
-        .header, .input-container, .search-bar-container, .modal-overlay { display: none !important; }
+        .header, .input-container, .history-overlay, .modal-overlay { display: none !important; }
         .messages-container { position: static; overflow: visible; height: auto; padding: 0; }
         body { background: white; color: black; height: auto; overflow: visible; }
         .msg-bubble { border: none !important; color: black !important; }
@@ -75,7 +96,6 @@
     .empty-state p { font-size: 13px; line-height: 1.4; }
 
     .msg-row { display: flex; gap: 10px; animation: fadeIn 0.3s ease; }
-    .msg-row.hidden { display: none; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     .avatar { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; }
     .avatar.ai { background: var(--primary); color: white; }
@@ -89,18 +109,9 @@
     .msg-bubble pre { background: #1e293b; color: #f8fafc; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
     
     .citation-btn {
-        display: inline-block;
-        background-color: var(--cite-bg);
-        color: var(--cite-text);
-        border: 1px solid transparent;
-        border-radius: 4px;
-        padding: 0 4px;
-        font-size: 11px;
-        font-weight: 600;
-        cursor: pointer;
-        margin: 0 2px;
-        vertical-align: 1px;
-        transition: all 0.2s;
+        display: inline-block; background-color: var(--cite-bg); color: var(--cite-text);
+        border: 1px solid transparent; border-radius: 4px; padding: 0 4px; font-size: 11px;
+        font-weight: 600; cursor: pointer; margin: 0 2px; vertical-align: 1px; transition: all 0.2s;
     }
     .citation-btn:hover { transform: translateY(-1px); filter: brightness(0.95); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
@@ -152,19 +163,28 @@
       Gargaaraa
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="toggleSearchBtn" title="Search Chat">
+      <!-- Search/History Button -->
+      <button class="icon-btn" id="toggleSearchBtn" title="History & Search">
          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       </button>
+      
+      <!-- Export Button -->
       <button class="icon-btn" id="exportChatBtn" title="Export Chat">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
       </button>
+
+      <!-- New Chat Button -->
       <button class="icon-btn" id="newChatBtn" title="New Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
       <button class="icon-btn" id="openSettingsBtn" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
     </div>
   </div>
 
-  <div class="search-bar-container" id="searchBarContainer">
-    <input type="text" class="search-input" id="searchInput" placeholder="Search in conversation..." autocomplete="off">
+  <!-- History Overlay (Replaces the inline search bar) -->
+  <div class="history-overlay" id="historyOverlay">
+    <div class="history-search-container">
+      <input type="text" class="search-input" id="historySearchInput" placeholder="Search past conversations..." autocomplete="off">
+    </div>
+    <div class="history-list" id="historyList"></div>
   </div>
 
   <div class="messages-container" id="messagesContainer">

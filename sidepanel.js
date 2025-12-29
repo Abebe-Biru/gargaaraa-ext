@@ -4,6 +4,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.js';
 const CONFIG = { CONTEXT_WINDOW_SIZE: 6, TYPING_SPEED: 10, PASTE_THRESHOLD: 500 };
 let currentAttachment = null;
 let chats = []; 
+let sessions = []; // Stores all history
+let activeSessionId = null;
 
 // --- 2. TRANSLATION DICTIONARY ---
 const TRANSLATIONS = {
@@ -21,55 +23,49 @@ const TRANSLATIONS = {
     // Tooltips
     tooltipNewChat: "አዲስ ውይይት ጀምር",
     tooltipSettings: "መቼቶች",
-    tooltipReadPage: "ይህንን ገጽ ያንብቡ (Chat with Page)",
-    tooltipAttach: "ፋይል አያይዝ (PDF/TXT)",
+    tooltipReadPage: "ይህንን ገጽ ያንብቡ",
+    tooltipAttach: "ፋይል አያይዝ",
     tooltipRemoveFile: "ፋይሉን አስወግድ",
-    tooltipExport: "ውይይቱን ላክ (Export)",
-    tooltipSearch: "ፈልግ",
-    searchPlaceholder: "በውይይቱ ውስጥ ፈልግ...",
+    tooltipExport: "ውይይቱን ላክ",
+    tooltipSearch: "የቀድሞ ውይይቶች (History)",
+    searchPlaceholder: "በታሪክ ውስጥ ፈልግ...",
     
-    // Chat Roles
     roleUser: "እርስዎ", 
     roleAI: "ጋርጋራ",
     welcomeTitle: "ሰላም!", 
     welcomeText: "እኔ ጋርጋራ ነኝ። ምን ልርዳዎ?",
     
-    // Status
     fileAttached: "ፋይል ተያይዟል", 
     parsing: "ፋይሉን በማንበብ ላይ...", 
     errorRead: "ፋይሉን ማንበብ አልተቻለም",
     pastedAsFile: "ረጅም ጽሑፍ እንደ ፋይል ተያይዟል", 
     settingsSaved: "መቼቶች ተቀምጠዋል",
-    chatCleared: "ውይይቱ ጸድቷል",
+    chatCleared: "አዲስ ውይይት ተጀምሯል",
     
-    // Page Reading
     readingPage: "ገጹን በማንበብ ላይ...", 
     readingLinks: "ተያያዥ ሊንኮችን በማንበብ ላይ...",
     pageLoaded: "የገጹ ይዘት ተጭኗል", 
-    pageError: "ገጹን ማንበብ አልተቻለም (የደህንነት ገደብ)",
-    pageEmpty: "ይህ ገጽ ባዶ ነው ወይም ሊነበብ አልቻለም",
+    pageError: "ገጹን ማንበብ አልተቻለም",
+    pageEmpty: "ይህ ገጽ ባዶ ነው",
     
-    // Alerts
     alertKeyMissing: "የኤፒአይ ቁልፍ የለም",
-    alertKeyDesc: "እባክዎ ለመወያየት በመቼቶች ውስጥ የኤፒአይ ቁልፍ ያስገቡ።",
-    alertKeySaved: "የኤፒአይ ቁልፍ ተቀምጧል",
+    alertKeyDesc: "እባክዎ መቼቶች ውስጥ የኤፒአይ ቁልፍ ያስገቡ።",
     alertKeyResetTitle: "ኤፒአይ ቁልፍን ዳግም አስጀምር",
-    alertKeyResetText: "ይህ የአሁኑን የኤፒአይ ቁልፍ ያስወግዳል። መቀጠል ይፈልጋሉ?",
+    alertKeyResetText: "ይህ የአሁኑን ቁልፍ ያስወግዳል።",
     alertDelTitle: "ውይይቱን ሰርዝ",
-    alertDelText: "ይህን ውይይት መሰረዝ ይፈልጋሉ?",
-    alertDelSuccess: "ውይይቱ ተሰርዟል",
+    alertDelText: "ይህን ታሪክ መሰረዝ ይፈልጋሉ?",
     
-    // Export Prompts
     exportTitle: "ውይይቱን ላክ",
     exportDesc: "እንዴት መላክ ይፈልጋሉ?",
-    btnPdf: "እንደ PDF (Print)",
+    btnPdf: "እንደ PDF",
     btnMd: "እንደ Markdown",
     
     btnYes: "አዎ", 
     btnCancel: "ይቅር",
     btnDelete: "ሰርዝ",
     networkError: "የኔትወርክ ችግር አጋጥሟል",
-    scrolledTo: "ወደ ምንጩ ተንቀሳቅሷል"
+    scrolledTo: "ወደ ምንጩ ተንቀሳቅሷል",
+    newChatTitle: "አዲስ ውይይት"
   },
   om: {
     placeholder: "Ergaa barreessi...", 
@@ -84,12 +80,12 @@ const TRANSLATIONS = {
 
     tooltipNewChat: "Haasaa haaraa jalqabi",
     tooltipSettings: "Qindaa'ina ban",
-    tooltipReadPage: "Fuula kana dubbisi (Chat with Page)",
-    tooltipAttach: "Faayilii qabsiisi (PDF/TXT)",
+    tooltipReadPage: "Fuula kana dubbisi",
+    tooltipAttach: "Faayilii qabsiisi",
     tooltipRemoveFile: "Faayilii haqi",
-    tooltipExport: "Haasaa gadi-buusi (Export)",
-    tooltipSearch: "Barbaadi",
-    searchPlaceholder: "Haasaa keessa barbaadi...",
+    tooltipExport: "Haasaa gadi-buusi",
+    tooltipSearch: "Seenaa Haasaa (History)",
+    searchPlaceholder: "Seenaa keessa barbaadi...",
 
     roleUser: "Isin", 
     roleAI: "Gargaaraa",
@@ -101,33 +97,32 @@ const TRANSLATIONS = {
     errorRead: "Faayilii dubbisuu hin dandeenye",
     pastedAsFile: "Barreeffamni dheeraan qabsiifameera", 
     settingsSaved: "Qindaa'inni kusameera",
-    chatCleared: "Haasaan haqameera",
+    chatCleared: "Haasaan haaraan jalqabameera",
 
     readingPage: "Fuula dubbisaa jira...", 
     readingLinks: "Geessituuwwan walqabatan dubbisaa...",
     pageLoaded: "Qabiyyeen fuulichaa fe'ameera", 
-    pageError: "Fuula dubbisuu hin dandeenye (Eegumsa)",
-    pageEmpty: "Fuulli kun duwwaa dha yookiin dubbisuun hin danda'amne",
+    pageError: "Fuula dubbisuu hin dandeenye",
+    pageEmpty: "Fuulli kun duwwaa dha",
 
     alertKeyMissing: "Furtuun API hin jiru",
-    alertKeyDesc: "Maaloo haasaa jalqabuuf qindaa'ina keessa Furtuu API galchi.",
-    alertKeySaved: "Furtuun API kusameera",
+    alertKeyDesc: "Maaloo Furtuu API galchi.",
     alertKeyResetTitle: "Furtuu API Haqi",
-    alertKeyResetText: "Kuni Furtuu API amma irra jiru ni haqa. Itti fufuu?",
+    alertKeyResetText: "Kuni Furtuu API ni haqa.",
     alertDelTitle: "Haasaa Haqi",
-    alertDelText: "Haasaa kana haqquu barbaaddaa?",
-    alertDelSuccess: "Haasaan haqameera",
+    alertDelText: "Seenaa kana haqquu barbaaddaa?",
 
     exportTitle: "Haasaa Gadi-buusi",
     exportDesc: "Akkaamiin gadi-buusuu barbaadda?",
-    btnPdf: "Akka PDF (Print)",
+    btnPdf: "Akka PDF",
     btnMd: "Akka Markdown",
 
     btnYes: "Eeyyee", 
     btnCancel: "Dhiisi",
     btnDelete: "Haqi",
     networkError: "Rakkoo neetworkii",
-    scrolledTo: "Madda isaa agarsiisaa jira"
+    scrolledTo: "Madda isaa agarsiisaa jira",
+    newChatTitle: "Haasaa Haaraa"
   }
 };
 
@@ -159,11 +154,12 @@ const els = {
   themeSelect: document.getElementById("themeSelect"),
   newChatBtn: document.getElementById("newChatBtn"),
   container: document.getElementById("messagesContainer"),
-  // Search & Export Elements
+  // Search & History Elements
   exportChatBtn: document.getElementById("exportChatBtn"),
   toggleSearchBtn: document.getElementById("toggleSearchBtn"),
-  searchBarContainer: document.getElementById("searchBarContainer"),
-  searchInput: document.getElementById("searchInput"),
+  historyOverlay: document.getElementById("historyOverlay"),
+  historyList: document.getElementById("historyList"),
+  historySearchInput: document.getElementById("historySearchInput"),
   
   lblModalTitle: document.getElementById("lbl-modalTitle"),
   lblApiKey: document.getElementById("lbl-apiKey"),
@@ -173,34 +169,54 @@ const els = {
   lblPowered: document.getElementById("lbl-powered")
 };
 
-// --- NOTIFLIX INIT ---
+// --- INIT ---
 Notiflix.Notify.init({ position: 'right-top', borderRadius: '8px', fontFamily: 'Inter', useIcon: true });
 Notiflix.Confirm.init({ borderRadius: '12px', titleColor: '#4f46e5', okButtonBackground: '#4f46e5', fontFamily: 'Inter', useGoogleFont: false });
-Notiflix.Report.init({ borderRadius: '12px', fontFamily: 'Inter' });
 
-// --- INIT ---
 document.addEventListener('DOMContentLoaded', async () => {
   els.app.classList.add('loaded');
   
-  // Load API Key State
+  // Load Configs
   const key = localStorage.getItem("API_KEY");
   if(key) {
     els.apiKeyInput.style.display = 'none';
     els.apiStatus.classList.add('show');
   }
-  
-  // Load Preferences
   els.languageSelect.value = localStorage.getItem("LANG") || "om";
   els.themeSelect.value = localStorage.getItem("THEME") || "light";
-  
   applyTheme(els.themeSelect.value);
   updateLabels();
 
-  // Load Chat
-  chats = JSON.parse(localStorage.getItem("CHAT_MSGS")) || [];
+  // Load Sessions
+  sessions = JSON.parse(localStorage.getItem("CHAT_SESSIONS")) || [];
+  
+  // Legacy Migration (if user had old single-session format)
+  const legacyChats = JSON.parse(localStorage.getItem("CHAT_MSGS"));
+  if (legacyChats && legacyChats.length > 0 && sessions.length === 0) {
+     const newId = Date.now().toString();
+     sessions.push({ 
+       id: newId, 
+       title: "Previous Chat", 
+       timestamp: Date.now(), 
+       messages: legacyChats 
+     });
+     localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
+     localStorage.removeItem("CHAT_MSGS");
+     activeSessionId = newId;
+     chats = legacyChats;
+  } else if (sessions.length > 0) {
+      // Load most recent session
+      const lastSession = sessions[0];
+      activeSessionId = lastSession.id;
+      chats = lastSession.messages;
+  } else {
+      // New User
+      createNewSessionId();
+  }
+
   renderMessages();
 
-  // Check for Context from Background (Right Click)
+  // Check for Context (Right Click)
   const data = await chrome.storage.local.get("pendingSelection");
   if (data.pendingSelection) {
     handleSelectedText(data.pendingSelection);
@@ -218,7 +234,150 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
-// --- CITATION CLICK HANDLER (UPDATED) ---
+// --- SESSION MANAGEMENT ---
+function createNewSessionId() {
+    activeSessionId = Date.now().toString();
+    chats = [];
+    currentAttachment = null;
+    els.attachmentPreview.classList.remove("active");
+    saveSession();
+}
+
+function saveSession() {
+    // Find index of current session
+    const index = sessions.findIndex(s => s.id === activeSessionId);
+    
+    // Generate Title from first user message
+    let title = t('newChatTitle');
+    const firstMsg = chats.find(m => m.role === 'user');
+    if (firstMsg) {
+        title = firstMsg.text.substring(0, 30) + (firstMsg.text.length > 30 ? "..." : "");
+    }
+
+    const sessionData = {
+        id: activeSessionId,
+        title: title,
+        timestamp: Date.now(),
+        messages: chats
+    };
+
+    if (index > -1) {
+        sessions[index] = sessionData; // Update existing
+    } else {
+        if(chats.length > 0) sessions.unshift(sessionData); // Create new if content exists
+    }
+    
+    // Sort by newest
+    sessions.sort((a,b) => b.timestamp - a.timestamp);
+    localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
+}
+
+function loadSession(id) {
+    const session = sessions.find(s => s.id === id);
+    if(session) {
+        activeSessionId = session.id;
+        chats = session.messages;
+        currentAttachment = null; // Attachments are session-specific but transient in this implementation
+        els.attachmentPreview.classList.remove("active");
+        renderMessages();
+        els.historyOverlay.classList.remove("open");
+        els.toggleSearchBtn.classList.remove("active");
+    }
+}
+
+function deleteSession(id, event) {
+    event.stopPropagation();
+    Notiflix.Confirm.show(t('alertDelTitle'), t('alertDelText'), t('btnDelete'), t('btnCancel'), () => {
+        sessions = sessions.filter(s => s.id !== id);
+        localStorage.setItem("CHAT_SESSIONS", JSON.stringify(sessions));
+        
+        // If we deleted the active one, clear view
+        if(id === activeSessionId) {
+            createNewSessionId();
+            renderMessages();
+        }
+        renderHistoryList(els.historySearchInput.value);
+    }, null, { okButtonBackground: '#ef4444' });
+}
+
+// --- HISTORY OVERLAY & SEARCH ---
+els.toggleSearchBtn.onclick = () => {
+  const isOpen = els.historyOverlay.classList.contains('open');
+  if (isOpen) {
+    els.historyOverlay.classList.remove('open');
+    els.toggleSearchBtn.classList.remove('active');
+  } else {
+    els.historyOverlay.classList.add('open');
+    els.toggleSearchBtn.classList.add('active');
+    renderHistoryList();
+    setTimeout(() => els.historySearchInput.focus(), 100);
+  }
+};
+
+els.historySearchInput.addEventListener('input', (e) => {
+    renderHistoryList(e.target.value);
+});
+
+function renderHistoryList(query = "") {
+    els.historyList.innerHTML = "";
+    const lowerQ = query.toLowerCase();
+    
+    // Filter sessions based on title or message content
+    const filtered = sessions.filter(s => {
+        if(!query) return true;
+        const inTitle = s.title.toLowerCase().includes(lowerQ);
+        const inMsg = s.messages.some(m => m.text.toLowerCase().includes(lowerQ));
+        return inTitle || inMsg;
+    });
+
+    if(filtered.length === 0) {
+        els.historyList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No chats found.</div>`;
+        return;
+    }
+
+    filtered.forEach(s => {
+        const item = document.createElement("div");
+        item.className = `history-item ${s.id === activeSessionId ? 'active' : ''}`;
+        
+        const dateStr = new Date(s.timestamp).toLocaleDateString();
+        
+        item.innerHTML = `
+            <div class="history-title">${s.title}</div>
+            <div class="history-meta">
+                <span>${dateStr}</span>
+                <button class="delete-chat-btn" title="Delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            </div>
+        `;
+        
+        item.onclick = () => loadSession(s.id);
+        item.querySelector('.delete-chat-btn').onclick = (e) => deleteSession(s.id, e);
+        
+        els.historyList.appendChild(item);
+    });
+}
+
+// --- NEW CHAT BUTTON (Archiving Logic) ---
+els.newChatBtn.onclick = () => {
+    // 1. If current chat is empty, just focus input
+    if (chats.length === 0) {
+        els.promptInput.focus();
+        return;
+    }
+    
+    // 2. Save current session (already handled on send, but good to ensure)
+    saveSession();
+    
+    // 3. Create fresh session
+    createNewSessionId();
+    renderMessages();
+    Notiflix.Notify.success(t('chatCleared'));
+};
+
+// --- REST OF CORE LOGIC (Citations, Export, Send) ---
+
+// Citation Click Handler
 els.messagesList.addEventListener('click', async (e) => {
   if (e.target.classList.contains('citation-btn')) {
     e.preventDefault();
@@ -234,49 +393,12 @@ els.messagesList.addEventListener('click', async (e) => {
   }
 });
 
-// --- SEARCH FEATURE ---
-els.toggleSearchBtn.onclick = () => {
-  const isOpen = els.searchBarContainer.classList.contains('open');
-  if (isOpen) {
-    els.searchBarContainer.classList.remove('open');
-    els.searchInput.value = "";
-    filterMessages(""); 
-  } else {
-    els.searchBarContainer.classList.add('open');
-    setTimeout(() => els.searchInput.focus(), 200);
-  }
-};
-
-els.searchInput.addEventListener('input', (e) => {
-  filterMessages(e.target.value);
-});
-
-function filterMessages(query) {
-  const rows = document.querySelectorAll('.msg-row');
-  const lowerQuery = query.toLowerCase().trim();
-  
-  rows.forEach(row => {
-    if(!lowerQuery) {
-      row.classList.remove('hidden');
-    } else {
-      const text = row.innerText.toLowerCase();
-      if(text.includes(lowerQuery)) row.classList.remove('hidden');
-      else row.classList.add('hidden');
-    }
-  });
-}
-
-// --- EXPORT FEATURE ---
+// Export Feature
 els.exportChatBtn.onclick = () => {
   if (chats.length === 0) return;
-  
-  Notiflix.Confirm.show(
-    t('exportTitle'),
-    t('exportDesc'),
-    t('btnPdf'),
-    t('btnMd'),
-    () => { window.print(); },
-    () => { exportToMarkdown(); },
+  Notiflix.Confirm.show(t('exportTitle'), t('exportDesc'), t('btnPdf'), t('btnMd'), 
+    () => { window.print(); }, 
+    () => { exportToMarkdown(); }, 
     { okButtonBackground: '#4f46e5', cancelButtonBackground: '#0f172a' }
   );
 };
@@ -298,7 +420,6 @@ function exportToMarkdown() {
   URL.revokeObjectURL(url);
 }
 
-// --- LABELS & THEME ---
 function updateLabels() {
   els.promptInput.placeholder = t('placeholder');
   els.lblModalTitle.textContent = t('modalTitle');
@@ -317,7 +438,7 @@ function updateLabels() {
   els.removeFileBtn.title = t('tooltipRemoveFile');
   els.exportChatBtn.title = t('tooltipExport');
   els.toggleSearchBtn.title = t('tooltipSearch');
-  els.searchInput.placeholder = t('searchPlaceholder');
+  els.historySearchInput.placeholder = t('searchPlaceholder');
 
   renderMessages();
 }
@@ -325,17 +446,11 @@ function updateLabels() {
 function applyTheme(theme) {
   if (theme === 'dark') document.documentElement.setAttribute("data-theme", "dark");
   else document.documentElement.removeAttribute("data-theme");
-  
   const isDark = theme === 'dark';
   Notiflix.Notify.merge({ background: isDark ? '#1e293b' : '#fff', textColor: isDark ? '#fff' : '#000' });
-  Notiflix.Confirm.merge({ 
-    backgroundColor: isDark ? '#1e293b' : '#fff', 
-    titleColor: isDark ? '#818cf8' : '#4f46e5', 
-    messageColor: isDark ? '#cbd5e1' : '#1e293b' 
-  });
+  Notiflix.Confirm.merge({ backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#818cf8' : '#4f46e5', messageColor: isDark ? '#cbd5e1' : '#1e293b' });
 }
 
-// --- CORE LOGIC ---
 function handleSelectedText(text) {
   if (!text) return;
   currentAttachment = { name: "selection.txt", content: text };
@@ -351,28 +466,24 @@ els.readPageBtn.onclick = async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error("No active tab");
 
-    // TAGGING DOM ELEMENTS LOGIC
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
         let idCounter = 1;
         const elements = document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
         let contextText = "";
-        
         elements.forEach(el => {
            const text = el.innerText.trim();
            if(text.length > 20 && el.offsetParent !== null) { 
-              el.setAttribute('data-g-id', idCounter); // Inject ID
+              el.setAttribute('data-g-id', idCounter);
               contextText += `[ID: ${idCounter}] ${text}\n\n`;
               idCounter++;
            }
         });
-
         const links = Array.from(document.querySelectorAll('a[href]'))
           .map(a => a.href)
           .filter(href => href.startsWith('http') && href.length > 25)
           .filter((v, i, a) => a.indexOf(v) === i);
-
         return { text: contextText, links: links.slice(0, 3) };
       }
     });
@@ -394,12 +505,7 @@ els.readPageBtn.onclick = async () => {
     els.fileName.textContent = currentAttachment.name;
     els.attachmentPreview.classList.add("active");
     Notiflix.Notify.success(t('pageLoaded'));
-
-  } catch (err) {
-    Notiflix.Notify.failure(t('pageError'));
-  } finally {
-    Notiflix.Loading.remove();
-  }
+  } catch (err) { Notiflix.Notify.failure(t('pageError')); } finally { Notiflix.Loading.remove(); }
 };
 
 async function fetchAndCleanUrl(url) {
@@ -417,7 +523,6 @@ async function fetchAndCleanUrl(url) {
 }
 
 els.attachBtn.onclick = () => els.fileInput.click();
-
 els.fileInput.onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -441,13 +546,8 @@ els.fileInput.onchange = async (e) => {
     }
   } catch(err) { Notiflix.Notify.failure(t('errorRead')); } finally { Notiflix.Loading.remove(); els.fileInput.value = ""; }
 };
+els.removeFileBtn.onclick = () => { currentAttachment = null; els.attachmentPreview.classList.remove("active"); };
 
-els.removeFileBtn.onclick = () => {
-  currentAttachment = null;
-  els.attachmentPreview.classList.remove("active");
-};
-
-// --- CHAT RENDER (FIXED CITATION REGEX) ---
 function renderMessages() {
   els.messagesList.innerHTML = "";
   if (chats.length === 0) {
@@ -470,18 +570,11 @@ function renderMessages() {
     if (msg.role === 'user') { bubble.textContent = msg.text; } 
     else {
       let rawHtml = marked.parse(msg.text);
-      
-      // FIXED REGEX: Matches [1], [1, 2], [1, 2, 3] and handles spacing
       rawHtml = rawHtml.replace(/\[\s*([\d\s,]+)\s*\]/g, (match, group) => {
-          if (!/^[\d\s,]+$/.test(group)) return match; // Safety check
-          
-          // Split numbers and create a button for each
+          if (!/^[\d\s,]+$/.test(group)) return match; 
           const nums = group.split(',').map(n => n.trim()).filter(n => n);
-          return nums.map(num => 
-              `<button class="citation-btn" data-id="${num}" title="Jump to section ${num}">[${num}]</button>`
-          ).join(' ');
+          return nums.map(num => `<button class="citation-btn" data-id="${num}" title="Jump to section ${num}">[${num}]</button>`).join(' ');
       });
-
       bubble.innerHTML = rawHtml;
       bubble.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     }
@@ -499,10 +592,7 @@ els.promptInput.addEventListener("keydown", (e) => { if(e.key === "Enter") sendM
 els.promptInput.addEventListener("input", () => { els.sendBtn.disabled = els.promptInput.value.trim() === ""; });
 els.promptInput.addEventListener('paste', (e) => {
   const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-  if (pastedText.length > CONFIG.PASTE_THRESHOLD) {
-    e.preventDefault();
-    handleSelectedText(pastedText); 
-  }
+  if (pastedText.length > CONFIG.PASTE_THRESHOLD) { e.preventDefault(); handleSelectedText(pastedText); }
 });
 
 async function sendMessage() {
@@ -514,7 +604,7 @@ async function sendMessage() {
   }
   if (!text) return;
   chats.push({ role: 'user', text: text });
-  localStorage.setItem("CHAT_MSGS", JSON.stringify(chats));
+  saveSession(); // Save on every message
   renderMessages();
   els.promptInput.value = "";
   els.sendBtn.disabled = true;
@@ -548,7 +638,7 @@ async function sendMessage() {
     const reply = data?.data?.response_text || "Error.";
     loadingRow.remove();
     chats.push({ role: 'assistant', text: reply });
-    localStorage.setItem("CHAT_MSGS", JSON.stringify(chats));
+    saveSession(); // Save AI reply
     renderMessages();
   } catch (err) { loadingRow.remove(); Notiflix.Notify.failure(t('networkError')); }
 }
@@ -567,7 +657,4 @@ els.saveSettingsBtn.onclick = () => {
 };
 els.resetApiKey.onclick = () => {
   Notiflix.Confirm.show(t('alertKeyResetTitle'), t('alertKeyResetText'), t('btnYes'), t('btnCancel'), () => { localStorage.removeItem("API_KEY"); els.apiStatus.classList.remove('show'); els.apiKeyInput.style.display = 'block'; els.apiKeyInput.focus(); });
-};
-els.newChatBtn.onclick = () => {
-  Notiflix.Confirm.show(t('alertDelTitle'), t('alertDelText'), t('btnDelete'), t('btnCancel'), () => { chats = []; currentAttachment = null; els.attachmentPreview.classList.remove("active"); localStorage.removeItem("CHAT_MSGS"); renderMessages(); Notiflix.Notify.info(t('chatCleared')); }, null, { okButtonBackground: '#ef4444' });
 };
